@@ -69,19 +69,22 @@ cd WSL2-Linux-Kernel
 # 例如，如果 uname -r 显示 5.15.90.1-microsoft-standard-WSL2
 git tag | grep "linux-msft-wsl-" | tail -20
 
-# 选择最接近的版本（替换为实际版本号）
-git checkout linux-msft-wsl-$(uname -r | cut -d'-' -f1)
+# 选择最接近的版本
+# 注意：先查看可用的标签，然后手动选择匹配版本
+git checkout linux-msft-wsl-5.15.90.1  # 替换为实际的版本号
 ```
 
 ### 步骤 3: 配置内核
 
 ```bash
 # 复制当前 WSL2 的配置作为基础
-# 从运行的 WSL2 中提取配置
-zcat /proc/config.gz > .config
-
-# 或者使用仓库中的默认配置
-# cp Microsoft/config-wsl .config
+# 从运行的 WSL2 中提取配置（如果存在）
+if [ -f /proc/config.gz ]; then
+    zcat /proc/config.gz > .config
+else
+    # 使用仓库中的默认配置
+    cp Microsoft/config-wsl .config
+fi
 
 # 确保配置是最新的
 make oldconfig
@@ -95,13 +98,11 @@ make oldconfig
 ./scripts/config --enable CONFIG_ANDROID_BINDER_IPC
 ./scripts/config --enable CONFIG_ANDROID_BINDERFS
 ./scripts/config --enable CONFIG_ASHMEM
-
-# 额外需要的配置（使用sed直接修改.config，因为scripts/config不支持字符串配置）
-./scripts/config --enable CONFIG_BINDERFS
 ./scripts/config --enable CONFIG_MEMCG
 ./scripts/config --enable CONFIG_CGROUP_DEVICE
 
-# 添加binder设备配置（字符串类型配置）
+# 添加binder设备配置（字符串类型配置，scripts/config不支持字符串类型）
+sed -i '/^CONFIG_ANDROID_BINDER_DEVICES=/d' .config
 echo 'CONFIG_ANDROID_BINDER_DEVICES="binder,hwbinder,vndbinder"' >> .config
 
 # 验证配置
@@ -429,6 +430,8 @@ uname -r
 
 # 应该显示自定义编译的版本，例如:
 # 5.15.90.1-microsoft-standard-WSL2
+```
+
 ```bash
 # 检查内核编译时间（确认是新内核）
 cat /proc/version
@@ -467,11 +470,13 @@ lsmod | grep -E "binder|ashmem"
 ### 3. 安装和测试 Waydroid
 
 ```bash
-# 添加 Waydroid 仓库
+# 安装 Waydroid
 sudo apt install -y waydroid
 
-# 初始化 Waydroid
+# 初始化 Waydroid（下载 LineageOS 镜像）
+# 如果需要包含 Google Play 服务，添加 -g 参数
 sudo waydroid init
+# 或带 Google Play: sudo waydroid init -g
 
 # 启动 Waydroid 服务
 sudo systemctl start waydroid-container
@@ -696,12 +701,12 @@ ls -la /dev/binder*
 
 # 2. 如果没有，手动挂载 binderfs
 sudo mkdir -p /dev/binderfs
-sudo mount -t binder none /dev/binderfs -o stats=global
+sudo mount -t binder binder /dev/binderfs
 
 # 3. 创建 binder 设备节点
-sudo ln -s /dev/binderfs/binder /dev/binder
-sudo ln -s /dev/binderfs/hwbinder /dev/hwbinder
-sudo ln -s /dev/binderfs/vndbinder /dev/vndbinder
+sudo ln -sf /dev/binderfs/binder /dev/binder
+sudo ln -sf /dev/binderfs/hwbinder /dev/hwbinder
+sudo ln -sf /dev/binderfs/vndbinder /dev/vndbinder
 ```
 
 ### 问题 5: 磁盘空间不足

@@ -189,7 +189,6 @@ configure_kernel() {
         "CONFIG_ANDROID_BINDER_IPC"
         "CONFIG_ANDROID_BINDERFS"
         "CONFIG_ASHMEM"
-        "CONFIG_BINDERFS"
         "CONFIG_MEMCG"
         "CONFIG_CGROUP_DEVICE"
     )

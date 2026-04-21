@@ -139,7 +139,7 @@ check_binder() {
         log_warn "BinderFS 未挂载"
         echo "提示: 可以尝试手动挂载:"
         echo "  sudo mkdir -p /dev/binderfs"
-        echo "  sudo mount -t binder none /dev/binderfs -o stats=global"
+        echo "  sudo mount -t binder binder /dev/binderfs"
     fi
 }
 
@@ -316,10 +316,10 @@ provide_fixes() {
             echo ""
             echo "2. Binder 设备不存在，尝试手动创建:"
             echo "   sudo mkdir -p /dev/binderfs"
-            echo "   sudo mount -t binder none /dev/binderfs -o stats=global"
-            echo "   sudo ln -s /dev/binderfs/binder /dev/binder"
-            echo "   sudo ln -s /dev/binderfs/hwbinder /dev/hwbinder"
-            echo "   sudo ln -s /dev/binderfs/vndbinder /dev/vndbinder"
+            echo "   sudo mount -t binder binder /dev/binderfs"
+            echo "   sudo ln -sf /dev/binderfs/binder /dev/binder"
+            echo "   sudo ln -sf /dev/binderfs/hwbinder /dev/hwbinder"
+            echo "   sudo ln -sf /dev/binderfs/vndbinder /dev/vndbinder"
         fi
     fi
     
