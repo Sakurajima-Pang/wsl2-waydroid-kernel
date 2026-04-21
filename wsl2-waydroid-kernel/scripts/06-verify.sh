@@ -239,15 +239,15 @@ print_summary() {
     echo "" | tee -a "$LOG_FILE"
     echo -e "${BLUE}----------------------------------------${NC}" | tee -a "$LOG_FILE"
     
-    verify_kernel_version && ((passed_checks++))
-    verify_kernel_modules && ((passed_checks++))
-    verify_binder_devices && ((passed_checks++))
-    verify_ashmem_device && ((passed_checks++))
-    verify_waydroid_installed && ((passed_checks++))
-    verify_waydroid_service && ((passed_checks++))
-    verify_waydroid_container && ((passed_checks++))
-    verify_waydroid_images && ((passed_checks++))
-    verify_lxc_config && ((passed_checks++))
+    verify_kernel_version && passed_checks=1
+    verify_kernel_modules && passed_checks=1
+    verify_binder_devices && passed_checks=1
+    verify_ashmem_device && passed_checks=1
+    verify_waydroid_installed && passed_checks=1
+    verify_waydroid_service && passed_checks=1
+    verify_waydroid_container && passed_checks=1
+    verify_waydroid_images && passed_checks=1
+    verify_lxc_config && passed_checks=1
     
     echo "" | tee -a "$LOG_FILE"
     

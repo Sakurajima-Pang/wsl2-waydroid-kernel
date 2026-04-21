@@ -271,29 +271,52 @@ main() {
     
     log_info "开始安装编译依赖..."
     log_info "日志文件: $LOG_FILE"
+    log_info "开始时间: $(date '+%Y-%m-%d %H:%M:%S')"
     echo "" | tee -a "$LOG_FILE"
     
+    local current_step=0
+    local total_steps=5
+    
+    # 进度显示函数
+    show_progress() {
+        local step=$1
+        local name=$2
+        log_info "[$step/$total_steps] $name..."
+    }
+    
+    current_step=$((current_step + 1))
+    show_progress $current_step "配置代理"
     configure_proxy
     echo "" | tee -a "$LOG_FILE"
     
+    current_step=$((current_step + 1))
+    show_progress $current_step "更新软件包列表"
     update_package_list
     echo "" | tee -a "$LOG_FILE"
     
+    current_step=$((current_step + 1))
+    show_progress $current_step "安装依赖包"
     install_dependencies
     echo "" | tee -a "$LOG_FILE"
     
+    current_step=$((current_step + 1))
+    show_progress $current_step "检查编译器版本"
     check_compiler_version
     echo "" | tee -a "$LOG_FILE"
     
+    current_step=$((current_step + 1))
+    show_progress $current_step "验证安装"
     if verify_installation; then
         echo "" | tee -a "$LOG_FILE"
-        log_success "所有依赖安装完成"
+        log_success "✓ 所有依赖安装完成"
         log_info "可以继续执行下一步: bash 03-build-kernel.sh"
+        log_info "完成时间: $(date '+%Y-%m-%d %H:%M:%S')"
         print_footer
         exit 0
     else
         echo "" | tee -a "$LOG_FILE"
-        log_error "依赖安装验证失败"
+        log_error "✗ 依赖安装验证失败"
+        log_info "完成时间: $(date '+%Y-%m-%d %H:%M:%S')"
         print_footer
         exit 1
     fi

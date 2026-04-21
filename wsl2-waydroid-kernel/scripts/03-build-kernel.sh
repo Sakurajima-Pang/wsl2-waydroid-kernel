@@ -52,6 +52,63 @@ print_footer() {
     echo -e "${BLUE}========================================${NC}"
 }
 
+configure_proxy() {
+    log_info "检查代理配置..."
+    
+    local proxy_set=false
+    
+    # 检查环境变量
+    if [ -n "$http_proxy" ] || [ -n "$https_proxy" ]; then
+        log_success "检测到系统代理配置"
+        log_info "HTTP_PROXY: $http_proxy"
+        log_info "HTTPS_PROXY: $https_proxy"
+        proxy_set=true
+    fi
+    
+    # 检查git配置
+    if [ -f "$HOME/.gitconfig" ] && grep -q "proxy" "$HOME/.gitconfig" 2>/dev/null; then
+        log_success "检测到 Git 代理配置"
+        local git_proxy
+        git_proxy=$(git config --global http.proxy 2>/dev/null || echo "未设置")
+        log_info "Git HTTP Proxy: $git_proxy"
+        proxy_set=true
+    fi
+    
+    # 如果没有配置代理，询问用户
+    if [ "$proxy_set" = false ]; then
+        log_warning "未检测到代理配置"
+        log_info "如果网络访问 GitHub 较慢，建议配置代理"
+        
+        read -p "是否需要配置代理? (y/N): " -n 1 -r
+        echo
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            read -p "请输入代理地址 (例如: http://127.0.0.1:7890): " proxy_url
+            if [ -n "$proxy_url" ]; then
+                export http_proxy="$proxy_url"
+                export https_proxy="$proxy_url"
+                export HTTP_PROXY="$proxy_url"
+                export HTTPS_PROXY="$proxy_url"
+                
+                git config --global http.proxy "$proxy_url"
+                git config --global https.proxy "$proxy_url"
+                
+                log_success "代理已配置: $proxy_url"
+                proxy_set=true
+            fi
+        fi
+    fi
+    
+    # 测试GitHub连接
+    log_info "测试 GitHub 连接..."
+    if curl -s --max-time 10 https://github.com > /dev/null 2>&1; then
+        log_success "GitHub 连接正常"
+    else
+        log_warning "GitHub 连接失败，可能需要配置代理"
+    fi
+    
+    echo "PROXY_CONFIGURED=$proxy_set" >> "$LOG_FILE"
+}
+
 get_kernel_branch() {
     local kernel_version
     kernel_version=$(uname -r | grep -oP '^\d+\.\d+\.\d+' || echo "5.15.133")
@@ -83,8 +140,14 @@ clone_kernel_source() {
     branch=$(get_kernel_branch)
     log_info "使用分支: $branch"
     
+    # 显示当前代理设置
+    log_info "当前代理设置:"
+    log_info "  http_proxy=${http_proxy:-'(未设置)'}")
+    log_info "  https_proxy=${https_proxy:-'(未设置)'}")
+    log_info "  Git HTTP Proxy=$(git config --global http.proxy 2>/dev/null || echo '(未设置)')"
+    
     if [ -d "$KERNEL_DIR" ]; then
-        log_warning "内核目录已存在"
+        log_warning "内核目录已存在: $KERNEL_DIR"
         read -p "是否重新克隆? (y/N): " -n 1 -r
         echo
         if [[ $REPLY =~ ^[Yy]$ ]]; then
@@ -93,19 +156,53 @@ clone_kernel_source() {
         else
             log_info "使用现有内核源码"
             cd "$KERNEL_DIR"
-            git fetch origin
-            git checkout "$branch" 2>/dev/null || git checkout -b "$branch" origin/"$branch"
+            log_info "获取最新更新..."
+            if ! git fetch origin 2>&1 | tee -a "$LOG_FILE"; then
+                log_error "git fetch 失败，请检查网络连接和代理设置"
+                return 1
+            fi
+            if ! git checkout "$branch" 2>/dev/null || ! git checkout -b "$branch" origin/"$branch" 2>/dev/null; then
+                log_warning "切换分支可能出现问题，继续使用当前分支"
+            fi
             return 0
         fi
     fi
     
     log_info "开始克隆（这可能需要几分钟）..."
-    if git clone --depth 1 --branch "$branch" "$WSL_KERNEL_REPO" "$KERNEL_DIR" 2>&1 | tee -a "$LOG_FILE"; then
+    log_info "执行命令: git clone --depth 1 --branch $branch $WSL_KERNEL_REPO $KERNEL_DIR"
+    
+    # 使用子shell来捕获错误
+    local clone_output
+    local clone_exit_code
+    
+    clone_output=$(git clone --depth 1 --branch "$branch" "$WSL_KERNEL_REPO" "$KERNEL_DIR" 2>&1)
+    clone_exit_code=$?
+    
+    # 输出到日志
+    echo "$clone_output" | tee -a "$LOG_FILE"
+    
+    if [ $clone_exit_code -eq 0 ]; then
         log_success "内核源码克隆完成"
         echo "KERNEL_CLONE_SUCCESS=true" >> "$LOG_FILE"
+        
+        # 显示克隆结果
+        local dir_size
+        dir_size=$(du -sh "$KERNEL_DIR" 2>/dev/null | cut -f1 || echo "未知")
+        log_info "克隆目录大小: $dir_size"
     else
-        log_error "内核源码克隆失败"
+        log_error "内核源码克隆失败 (退出码: $clone_exit_code)"
+        log_error "错误信息:"
+        echo "$clone_output" | while read line; do
+            log_error "  $line"
+        done
         echo "KERNEL_CLONE_SUCCESS=false" >> "$LOG_FILE"
+        
+        log_info ""
+        log_info "可能的解决方案:"
+        log_info "1. 检查网络连接"
+        log_info "2. 配置代理: export https_proxy=http://127.0.0.1:7890"
+        log_info "3. 手动克隆: git clone $WSL_KERNEL_REPO $KERNEL_DIR"
+        
         return 1
     fi
 }
@@ -299,6 +396,21 @@ main() {
     log_info "开始编译 WSL2 Waydroid 内核"
     log_info "日志文件: $LOG_FILE"
     log_info "构建目录: $BUILD_DIR"
+    log_info "开始时间: $(date '+%Y-%m-%d %H:%M:%S')"
+    echo "" | tee -a "$LOG_FILE"
+    
+    local current_step=0
+    local total_steps=6
+    
+    # 进度显示函数
+    show_progress() {
+        local step=$1
+        local name=$2
+        log_info "[$step/$total_steps] $name..."
+    }
+    
+    # 配置代理
+    configure_proxy
     echo "" | tee -a "$LOG_FILE"
     
     read -p "确认开始编译? 这将需要 30-60 分钟 (Y/n): " -n 1 -r
@@ -308,26 +420,51 @@ main() {
         exit 0
     fi
     
-    clone_kernel_source
+    current_step=1
+    show_progress $current_step "克隆内核源码"
+    if ! clone_kernel_source; then
+        log_error "克隆内核源码失败，编译中止"
+        print_footer
+        exit 1
+    fi
     echo "" | tee -a "$LOG_FILE"
     
+    current_step=1
+    show_progress $current_step "配置内核"
     configure_kernel
     echo "" | tee -a "$LOG_FILE"
     
-    compile_kernel
+    current_step=1
+    show_progress $current_step "编译内核 (这可能需要30-60分钟)"
+    if ! compile_kernel; then
+        log_error "内核编译失败"
+        print_footer
+        exit 1
+    fi
     echo "" | tee -a "$LOG_FILE"
     
+    current_step=1
+    show_progress $current_step "编译内核模块"
     compile_modules
     echo "" | tee -a "$LOG_FILE"
     
-    copy_kernel_image
+    current_step=1
+    show_progress $current_step "复制内核镜像"
+    if ! copy_kernel_image; then
+        log_error "复制内核镜像失败"
+        print_footer
+        exit 1
+    fi
     echo "" | tee -a "$LOG_FILE"
     
+    current_step=1
+    show_progress $current_step "保存内核信息"
     save_kernel_info
     
     echo "" | tee -a "$LOG_FILE"
-    log_success "内核编译全部完成"
+    log_success "✓ 内核编译全部完成"
     log_info "内核文件: $BUILD_DIR/bzImage-waydroid"
+    log_info "完成时间: $(date '+%Y-%m-%d %H:%M:%S')"
     log_info "可以继续执行下一步: bash 04-install-kernel.sh"
     
     print_footer

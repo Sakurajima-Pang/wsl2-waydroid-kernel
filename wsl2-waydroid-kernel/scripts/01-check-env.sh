@@ -1,6 +1,7 @@
 #!/bin/bash
 
-set -e
+# 不立即退出，而是手动处理错误
+# set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
@@ -235,75 +236,112 @@ check_existing_waydroid() {
 main() {
     print_header
     
+    log_info "开始环境检查..."
+    log_info "日志文件: $LOG_FILE"
+    log_info "检查时间: $(date '+%Y-%m-%d %H:%M:%S')"
+    echo "" | tee -a "$LOG_FILE"
+    
     local exit_code=0
     local checks_passed=0
     local checks_total=0
+    local current_step=0
+    local total_steps=8
     
-    ((checks_total++))
+    # 进度显示函数
+    show_progress() {
+        local step=$1
+        local name=$2
+        log_info "[$step/$total_steps] 正在检查: $name..."
+    }
+    
+    current_step=1
+    show_progress $current_step "WSL版本"
+    checks_total=1
     if check_wsl_version; then
-        ((checks_passed++))
+        checks_passed=1
     else
         exit_code=1
     fi
-    
-    ((checks_total++))
-    if check_distribution; then
-        ((checks_passed++))
-    else
-        exit_code=1
-    fi
-    
-    ((checks_total++))
-    if check_architecture; then
-        ((checks_passed++))
-    else
-        exit_code=1
-    fi
-    
-    ((checks_total++))
-    if check_disk_space; then
-        ((checks_passed++))
-    else
-        exit_code=1
-    fi
-    
-    ((checks_total++))
-    if check_network; then
-        ((checks_passed++))
-    else
-        exit_code=1
-    fi
-    
-    ((checks_total++))
-    if check_kernel_version; then
-        ((checks_passed++))
-    else
-        exit_code=1
-    fi
-    
-    ((checks_total++))
-    if check_memory; then
-        ((checks_passed++))
-    else
-        exit_code=1
-    fi
-    
-    ((checks_total++))
-    if check_existing_waydroid; then
-        ((checks_passed++))
-    else
-        exit_code=1
-    fi
-    
     echo "" | tee -a "$LOG_FILE"
+    
+    current_step=1
+    show_progress $current_step "发行版信息"
+    checks_total=1
+    if check_distribution; then
+        checks_passed=1
+    else
+        exit_code=1
+    fi
+    echo "" | tee -a "$LOG_FILE"
+    
+    current_step=1
+    show_progress $current_step "系统架构"
+    checks_total=1
+    if check_architecture; then
+        checks_passed=1
+    else
+        exit_code=1
+    fi
+    echo "" | tee -a "$LOG_FILE"
+    
+    current_step=1
+    show_progress $current_step "磁盘空间"
+    checks_total=1
+    if check_disk_space; then
+        checks_passed=1
+    else
+        exit_code=1
+    fi
+    echo "" | tee -a "$LOG_FILE"
+    
+    current_step=1
+    show_progress $current_step "网络连接"
+    checks_total=1
+    if check_network; then
+        checks_passed=1
+    else
+        exit_code=1
+    fi
+    echo "" | tee -a "$LOG_FILE"
+    
+    current_step=1
+    show_progress $current_step "内核版本"
+    checks_total=1
+    if check_kernel_version; then
+        checks_passed=1
+    else
+        exit_code=1
+    fi
+    echo "" | tee -a "$LOG_FILE"
+    
+    current_step=1
+    show_progress $current_step "内存状态"
+    checks_total=1
+    if check_memory; then
+        checks_passed=1
+    else
+        exit_code=1
+    fi
+    echo "" | tee -a "$LOG_FILE"
+    
+    current_step=1
+    show_progress $current_step "Waydroid安装状态"
+    checks_total=1
+    if check_existing_waydroid; then
+        checks_passed=1
+    else
+        exit_code=1
+    fi
+    echo "" | tee -a "$LOG_FILE"
+    
     echo -e "${BLUE}----------------------------------------${NC}" | tee -a "$LOG_FILE"
     
     if [ $exit_code -eq 0 ]; then
-        echo -e "${GREEN}状态: 环境检查通过 ($checks_passed/$checks_total)${NC}" | tee -a "$LOG_FILE"
+        echo -e "${GREEN}✓ 状态: 环境检查通过 ($checks_passed/$checks_total)${NC}" | tee -a "$LOG_FILE"
         echo "" | tee -a "$LOG_FILE"
         log_info "可以继续执行下一步: bash 02-install-deps.sh"
     else
-        echo -e "${RED}状态: 环境检查未通过 ($checks_passed/$checks_total)${NC}" | tee -a "$LOG_FILE"
+        echo -e "${RED}✗ 状态: 环境检查未通过 ($checks_passed/$checks_total)${NC}" | tee -a "$LOG_FILE"
         echo "" | tee -a "$LOG_FILE"
         log_error "请解决上述问题后再继续"
     fi
@@ -311,6 +349,7 @@ main() {
     print_footer
     
     log_info "日志已保存到: $LOG_FILE"
+    log_info "检查完成时间: $(date '+%Y-%m-%d %H:%M:%S')"
     
     exit $exit_code
 }
