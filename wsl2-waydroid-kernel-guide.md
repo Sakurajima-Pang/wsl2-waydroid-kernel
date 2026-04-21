@@ -247,6 +247,17 @@ log_step() {
     echo -e "${BLUE}[STEP]${NC} $1"
 }
 
+# 检查是否以sudo运行
+check_sudo() {
+    log_step "检查权限..."
+    if [ "$EUID" -ne 0 ]; then
+        log_error "此脚本需要以 sudo 权限运行"
+        log_error "请使用: sudo $0"
+        exit 1
+    fi
+    log_info "权限检查通过"
+}
+
 # 检查是否在 WSL2 中运行
 check_wsl2() {
     log_step "检查 WSL2 环境..."
@@ -545,8 +556,8 @@ generate_wsl_config() {
         cpu_limit=2
     fi
     
-    # 获取Windows路径格式
-    local win_path_escaped=$(echo "${WIN_KERNEL_PATH}" | sed 's|/mnt/c/|C:\\\\|' | sed 's|/|\\\\|g')
+    # 获取Windows路径格式 (支持任意盘符 c, d, e等)
+    local win_path_escaped=$(echo "${WIN_KERNEL_PATH}" | sed 's|/mnt/\([a-zA-Z]\)/|\1:\\\\|' | sed 's|/|\\\\|g')
     
     cat > "$config_file" << EOF
 # WSL2 配置文件
@@ -707,6 +718,7 @@ main() {
     echo ""
     
     # 检查步骤
+    check_sudo
     check_wsl2
     check_disk_space
     check_network

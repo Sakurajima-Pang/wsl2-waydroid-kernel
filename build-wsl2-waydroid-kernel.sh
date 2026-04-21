@@ -117,10 +117,10 @@ install_dependencies() {
     )
 
     log_info "更新软件包列表..."
-    sudo apt update
+    apt update
 
     log_info "安装依赖包..."
-    sudo apt install -y "${deps[@]}"
+    apt install -y "${deps[@]}"
 
     # 配置 ccache 加速重复编译
     log_info "配置 ccache..."
@@ -341,9 +341,10 @@ generate_wsl_config() {
         cpu_limit=2
     fi
     
-    # 获取Windows路径格式 (将 /mnt/c/path 转换为 C:\\path 格式)
+    # 获取Windows路径格式 (将 /mnt/x/path 转换为 X:\\path 格式)
     # WSL2 .wslconfig 文件需要使用双反斜杠作为路径分隔符
-    local win_path=$(echo "${WIN_KERNEL_PATH}" | sed 's|/mnt/c/|C:\\\\|' | sed 's|/|\\\\|g')
+    # 支持任意盘符 (c, d, e等)
+    local win_path=$(echo "${WIN_KERNEL_PATH}" | sed 's|/mnt/\([a-zA-Z]\)/|\1:\\\\|' | sed 's|/|\\\\|g')
     
     cat > "$config_file" << EOF
 # WSL2 配置文件
