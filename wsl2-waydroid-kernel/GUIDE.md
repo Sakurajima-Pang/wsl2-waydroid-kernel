@@ -85,8 +85,6 @@ wsl2-waydroid-kernel/
 │   ├── 05-install-waydroid.sh  # Waydroid 安装脚本
 │   ├── 06-verify.sh            # 验证脚本
 │   └── 99-rollback.sh          # 回滚脚本
-├── config/
-│   └── kernel-config.patch     # 内核配置补丁
 └── logs/                       # 日志目录（运行时创建）
 ```
 
