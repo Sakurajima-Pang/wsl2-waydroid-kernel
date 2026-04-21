@@ -5,8 +5,9 @@
 
 ## 当前环境
 - Windows 版本: Windows 10 专业版 (Build 19045)
-- WSL2 已安装，使用 Ubuntu 发行版
+- WSL2 已安装，使用 Ubuntu 22.04/24.04 LTS 发行版
 - 目标: 编译自定义 WSL2 内核，启用 Waydroid 支持
+- 使用场景: Android 应用开发测试、运行特定移动应用等
 
 ## 需要启用的内核模块
 ```
