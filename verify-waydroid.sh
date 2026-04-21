@@ -122,7 +122,7 @@ check_binder() {
         if [ -e "$device" ]; then
             local perms=$(ls -la "$device" 2>/dev/null | awk '{print $1, $3, $4}')
             log_pass "$device 存在 ($perms)"
-            let found_count++
+            found_count=$((found_count+1))
         else
             log_fail "$device 不存在"
         fi

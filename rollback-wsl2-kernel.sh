@@ -222,7 +222,7 @@ restore_from_backup() {
         local size=$(du -sh "$backup" 2>/dev/null | cut -f1)
         local date=$(stat -c %y "$backup" 2>/dev/null | cut -d' ' -f1)
         echo "  $i) $name (大小: $size, 日期: $date)"
-        ((i++))
+        i=$((i+1))
     done
     
     echo ""
@@ -257,13 +257,13 @@ restore_from_backup() {
     # 确保 WSL 配置正确
     local wsl_userprofile=$(get_windows_userprofile)
     local wslconfig_path="${wsl_userprofile}/.wslconfig"
-    local win_path_escaped=$(echo "${WIN_KERNEL_PATH}" | sed 's|/mnt/c/|C:\\|' | sed 's|/|\\|g')
+    local win_path=$(echo "${WIN_KERNEL_PATH}" | sed 's|/mnt/c/|C:\\|' | sed 's|/|\\|g')
 
     if [ ! -f "$wslconfig_path" ] 2>/dev/null; then
         log_info "创建 WSL 配置文件..."
         cat > "$wslconfig_path" << EOF
 [wsl2]
-kernel=${win_path_escaped}\\\\bzImage-waydroid
+kernel=${win_path}\\bzImage-waydroid
 memory=8GB
 processors=4
 swap=2GB

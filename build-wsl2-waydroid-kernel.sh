@@ -326,15 +326,15 @@ generate_wsl_config() {
     fi
     
     # 获取Windows路径格式 (将 /mnt/c/path 转换为 C:\path 格式)
-    local win_path_escaped=$(echo "${WIN_KERNEL_PATH}" | sed 's|/mnt/c/|C:\\|' | sed 's|/|\\|g')
+    local win_path=$(echo "${WIN_KERNEL_PATH}" | sed 's|/mnt/c/|C:\\|' | sed 's|/|\\|g')
     
     cat > "$config_file" << EOF
 # WSL2 配置文件
-# 将此内容复制到 %USERPROFILE%\\.wslconfig (Windows 用户目录下)
+# 将此内容复制到 %USERPROFILE%\.wslconfig (Windows 用户目录下)
 
 [wsl2]
 # 自定义内核路径
-kernel=${win_path_escaped}\\\\bzImage-waydroid
+kernel=${win_path}\\bzImage-waydroid
 
 # 内存限制 (根据你的系统调整)
 memory=${mem_limit}GB
