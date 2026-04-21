@@ -1,0 +1,52 @@
+# WSL2 Waydroid 内核编译提示词
+
+## 背景
+我需要在 Windows 10/11 的 WSL2 中运行 Waydroid（Android 容器），但 WSL2 默认内核缺少必要的 Android 驱动模块。
+
+## 当前环境
+- Windows 版本: Windows 10 专业版 (Build 19045)
+- WSL2 已安装，使用 Ubuntu 发行版
+- 目标: 编译自定义 WSL2 内核，启用 Waydroid 支持
+
+## 需要启用的内核模块
+```
+CONFIG_ANDROID=y
+CONFIG_ANDROID_BINDER_IPC=y
+CONFIG_ANDROID_BINDERFS=y
+CONFIG_ASHMEM=y
+CONFIG_ANDROID_SIMPLE_LMK=y
+CONFIG_SW_SYNC=y
+CONFIG_SYNC_FILE=y
+```
+
+## 任务要求
+请提供：
+
+1. **完整的编译步骤**
+   - 环境准备（依赖安装）
+   - 下载微软 WSL2 内核源码
+   - 内核配置修改方法
+   - 编译命令和参数
+   - 安装和替换方法
+
+2. **自动化脚本**
+   - 一键完成所有步骤的 Bash 脚本
+   - 包含错误处理和进度提示
+
+3. **验证方法**
+   - 如何确认新内核已生效
+   - 如何验证 Waydroid 可以正常运行
+
+4. **回滚方案**
+   - 如何恢复到默认内核
+   - 常见问题排查
+
+## 注意事项
+- 编译时间可能较长（30-60分钟）
+- 需要 15-20GB 磁盘空间
+- 内核更新后可能需要重新编译
+- 不影响 Windows 主系统
+
+## 参考资源
+- 微软 WSL2 内核源码: https://github.com/microsoft/WSL2-Linux-Kernel
+- Waydroid 官方文档: https://docs.waydro.id/

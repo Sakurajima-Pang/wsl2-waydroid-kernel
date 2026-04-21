@@ -1,0 +1,29 @@
+# 编译生成的文件
+*.log
+build.log
+*.tmp
+*.temp
+
+# 备份文件
+*.backup.*
+*~
+*.bak
+
+# 内核相关（如果下载到项目目录）
+WSL2-Linux-Kernel/
+wsl2-kernel/
+wsl2-kernel-build/
+
+# APK文件（如果不需要版本控制）
+*.apk
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# IDE配置
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
