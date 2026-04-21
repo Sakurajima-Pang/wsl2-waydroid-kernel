@@ -559,6 +559,7 @@ generate_wsl_config() {
     # 获取Windows路径格式 (将 /mnt/x/path 转换为 X:\\path 格式)
     # WSL2 .wslconfig 文件需要使用双反斜杠作为路径分隔符
     # 支持任意盘符 (c, d, e等)
+    # sed替换中，'\\\\' 表示替换为两个反斜杠，最终在配置文件中显示为双反斜杠
     local win_path=$(echo "${WIN_KERNEL_PATH}" | sed 's|/mnt/\([a-zA-Z]\)/|\1:\\\\|' | sed 's|/|\\\\|g')
     # 追加内核文件名，使用双反斜杠
     win_path="${win_path}\\bzImage-waydroid"
@@ -1524,6 +1525,7 @@ restore_from_backup() {
     local wslconfig_path="${wsl_userprofile}/.wslconfig"
     # WSL2 .wslconfig 文件需要使用双反斜杠作为路径分隔符
     # 支持任意盘符 (c, d, e等)
+    # sed替换中，'\\\\' 表示替换为两个反斜杠，最终在配置文件中显示为双反斜杠
     local win_path=$(echo "${WIN_KERNEL_PATH}" | sed 's|/mnt/\([a-zA-Z]\)/|\1:\\\\|' | sed 's|/|\\\\|g')
     # 追加内核文件名，使用双反斜杠
     win_path="${win_path}\\bzImage-waydroid"
