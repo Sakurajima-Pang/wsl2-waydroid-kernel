@@ -332,10 +332,10 @@ install_dependencies() {
     )
     
     log_info "更新软件包列表..."
-    sudo apt update
+    apt update
     
     log_info "安装依赖包..."
-    sudo apt install -y "${deps[@]}"
+    apt install -y "${deps[@]}"
     
     # 配置 ccache 加速重复编译
     log_info "配置 ccache..."
@@ -556,16 +556,18 @@ generate_wsl_config() {
         cpu_limit=2
     fi
     
-    # 获取Windows路径格式 (支持任意盘符 c, d, e等)
-    local win_path_escaped=$(echo "${WIN_KERNEL_PATH}" | sed 's|/mnt/\([a-zA-Z]\)/|\1:\\\\|' | sed 's|/|\\\\|g')
+    # 获取Windows路径格式 (将 /mnt/x/path 转换为 X:\\path 格式)
+    # WSL2 .wslconfig 文件需要使用双反斜杠作为路径分隔符
+    # 支持任意盘符 (c, d, e等)
+    local win_path=$(echo "${WIN_KERNEL_PATH}" | sed 's|/mnt/\([a-zA-Z]\)/|\1:\\\\|' | sed 's|/|\\\\|g')
     
     cat > "$config_file" << EOF
 # WSL2 配置文件
-# 将此内容复制到 %USERPROFILE%\\.wslconfig (Windows 用户目录下)
+# 将此内容复制到 %USERPROFILE%\.wslconfig (Windows 用户目录下)
 
 [wsl2]
 # 自定义内核路径
-kernel=${win_path_escaped}\\\\bzImage-waydroid
+kernel=${win_path}\\\\bzImage-waydroid
 
 # 内存限制 (根据你的系统调整)
 memory=${mem_limit}GB
@@ -1503,7 +1505,9 @@ restore_from_backup() {
     # 确保 WSL 配置正确
     local wsl_userprofile=$(get_windows_userprofile)
     local wslconfig_path="${wsl_userprofile}/.wslconfig"
-    local win_path=$(echo "${WIN_KERNEL_PATH}" | sed 's|/mnt/c/|C:\\\\|' | sed 's|/|\\\\|g')
+    # WSL2 .wslconfig 文件需要使用双反斜杠作为路径分隔符
+    # 支持任意盘符 (c, d, e等)
+    local win_path=$(echo "${WIN_KERNEL_PATH}" | sed 's|/mnt/\([a-zA-Z]\)/|\1:\\\\|' | sed 's|/|\\\\|g')
 
     if [ ! -f "$wslconfig_path" ] 2>/dev/null; then
         log_info "创建 WSL 配置文件..."
@@ -1604,11 +1608,11 @@ show_backups() {
     
     echo "----------------------------------------"
     
-    # 查找配置备份
+    # 查找配置备份 (在用户目录下查找)
     echo "WSL 配置备份:"
     local wsl_userprofile=$(get_windows_userprofile)
-    local config_backup_dir="$(dirname "$wsl_userprofile")"
-    local config_backups=$(find "$config_backup_dir" -name ".wslconfig.backup.*" 2>/dev/null || true)
+    # 直接在当前用户目录下查找，而不是父目录
+    local config_backups=$(find "$wsl_userprofile" -maxdepth 1 -name ".wslconfig.backup.*" 2>/dev/null || true)
 
     if [ -n "$config_backups" ]; then
         echo "$config_backups" | while read file; do

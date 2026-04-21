@@ -83,12 +83,14 @@ check_kernel_config() {
     
     log_info "使用配置源: $config_source"
     
-    # 定义需要检查的配置
+    # 定义需要检查的配置（与提示词和指南中要求的6个模块一致）
     declare -a required_configs=(
         "CONFIG_ANDROID"
         "CONFIG_ANDROID_BINDER_IPC"
         "CONFIG_ANDROID_BINDERFS"
         "CONFIG_ASHMEM"
+        "CONFIG_MEMCG"
+        "CONFIG_CGROUP_DEVICE"
     )
     
     for cfg in "${required_configs[@]}"; do

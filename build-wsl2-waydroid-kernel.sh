@@ -477,7 +477,7 @@ echo ""
 # 检查内核配置
 echo "6. 检查内核配置:"
 if [ -f /proc/config.gz ]; then
-    for cfg in CONFIG_ANDROID CONFIG_ANDROID_BINDER_IPC CONFIG_ANDROID_BINDERFS CONFIG_ASHMEM; do
+    for cfg in CONFIG_ANDROID CONFIG_ANDROID_BINDER_IPC CONFIG_ANDROID_BINDERFS CONFIG_ASHMEM CONFIG_MEMCG CONFIG_CGROUP_DEVICE; do
         if zcat /proc/config.gz 2>/dev/null | grep -q "^${cfg}=y"; then
             echo -e "   ${GREEN}✓${NC} ${cfg}=y"
         else
