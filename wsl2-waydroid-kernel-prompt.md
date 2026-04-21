@@ -42,11 +42,21 @@ CONFIG_CGROUP_DEVICE=y
    - 如何恢复到默认内核
    - 常见问题排查
 
+## 部署需求
+用户需要完成以下部署任务：
+1. 检查当前 WSL2 环境状态
+2. 编译并安装支持 Waydroid 的自定义内核
+3. 配置 WSL2 使用新内核
+4. 安装 Waydroid 容器环境
+5. 安装指定的 Android APK 应用
+6. 启动并验证应用运行
+
 ## 注意事项
 - 编译时间可能较长（30-60分钟）
 - 需要 15-20GB 磁盘空间
 - 内核更新后可能需要重新编译
 - 不影响 Windows 主系统
+- 部署过程中可能需要处理网络代理配置
 
 ## 参考资源
 - 微软 WSL2 内核源码: https://github.com/microsoft/WSL2-Linux-Kernel
