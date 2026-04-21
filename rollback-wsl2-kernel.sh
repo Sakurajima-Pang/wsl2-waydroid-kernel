@@ -63,8 +63,8 @@ check_wsl2() {
 get_windows_userprofile() {
     local win_userprofile="$(cmd.exe /c "echo %USERPROFILE%" 2>/dev/null | tr -d '\r')"
     # 转换为 WSL 路径格式: C:\Users\Username -> /mnt/c/Users/Username
-    # 使用 tr 转换反斜杠，使用 sed 转换盘符 (支持任意盘符 a-z, 不区分大小写)
-    local wsl_path="$(echo "$win_userprofile" | tr '\\' '/' | sed 's/^[a-zA-Z]:/\/mnt\/\L&/' | sed 's|/mnt/\([a-z]\):|/mnt/\1|')"
+    # 支持任意盘符 (c, d, e等)
+    local wsl_path="$(echo "$win_userprofile" | sed 's|\\|/|g' | sed 's|^\([a-zA-Z]\):|/mnt/\L\1|')"
     echo "$wsl_path"
 }
 
