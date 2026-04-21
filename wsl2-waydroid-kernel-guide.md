@@ -560,8 +560,8 @@ generate_wsl_config() {
     # WSL2 .wslconfig 文件需要使用双反斜杠作为路径分隔符
     # 支持任意盘符 (c, d, e等)
     local win_path=$(echo "${WIN_KERNEL_PATH}" | sed 's|/mnt/\([a-zA-Z]\)/|\1:\\\\|' | sed 's|/|\\\\|g')
-    # 确保内核路径使用双反斜杠
-    win_path="${win_path}\\\\bzImage-waydroid"
+    # 追加内核文件名，使用双反斜杠
+    win_path="${win_path}\\bzImage-waydroid"
     
     cat > "$config_file" << EOF
 # WSL2 配置文件
@@ -1525,8 +1525,8 @@ restore_from_backup() {
     # WSL2 .wslconfig 文件需要使用双反斜杠作为路径分隔符
     # 支持任意盘符 (c, d, e等)
     local win_path=$(echo "${WIN_KERNEL_PATH}" | sed 's|/mnt/\([a-zA-Z]\)/|\1:\\\\|' | sed 's|/|\\\\|g')
-    # 确保内核路径使用双反斜杠
-    win_path="${win_path}\\\\bzImage-waydroid"
+    # 追加内核文件名，使用双反斜杠
+    win_path="${win_path}\\bzImage-waydroid"
 
     if [ ! -f "$wslconfig_path" ] 2>/dev/null; then
         log_info "创建 WSL 配置文件..."

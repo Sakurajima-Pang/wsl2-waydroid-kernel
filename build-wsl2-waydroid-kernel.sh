@@ -344,9 +344,11 @@ generate_wsl_config() {
     # 获取Windows路径格式 (将 /mnt/x/path 转换为 X:\\path 格式)
     # WSL2 .wslconfig 文件需要使用双反斜杠作为路径分隔符
     # 支持任意盘符 (c, d, e等)
+    # sed 's|/|\|' 中，bash将 '\\' 解释为 '\\', sed将其作为 '\' 替换
+    # 要得到 '\\' 的结果，需要在sed中写 '\\\\'
     local win_path=$(echo "${WIN_KERNEL_PATH}" | sed 's|/mnt/\([a-zA-Z]\)/|\1:\\\\|' | sed 's|/|\\\\|g')
-    # 确保内核路径使用双反斜杠
-    win_path="${win_path}\\\\bzImage-waydroid"
+    # 追加内核文件名，使用双反斜杠
+    win_path="${win_path}\\bzImage-waydroid"
     
     cat > "$config_file" << EOF
 # WSL2 配置文件
