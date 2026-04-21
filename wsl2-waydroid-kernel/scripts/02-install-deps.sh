@@ -1,0 +1,302 @@
+#!/bin/bash
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+LOG_DIR="$PROJECT_DIR/logs"
+mkdir -p "$LOG_DIR"
+
+LOG_FILE="$LOG_DIR/02-install-deps-$(date +%Y%m%d-%H%M%S).log"
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+log_info() {
+    echo -e "${BLUE}[INFO]${NC} $1" | tee -a "$LOG_FILE"
+}
+
+log_success() {
+    echo -e "${GREEN}[✓]${NC} $1" | tee -a "$LOG_FILE"
+}
+
+log_warning() {
+    echo -e "${YELLOW}[!]${NC} $1" | tee -a "$LOG_FILE"
+}
+
+log_error() {
+    echo -e "${RED}[✗]${NC} $1" | tee -a "$LOG_FILE"
+}
+
+print_header() {
+    echo -e "${BLUE}========================================${NC}"
+    echo -e "${BLUE}   安装编译依赖 v1.0.0${NC}"
+    echo -e "${BLUE}========================================${NC}"
+    echo "" | tee -a "$LOG_FILE"
+}
+
+print_footer() {
+    echo "" | tee -a "$LOG_FILE"
+    echo -e "${BLUE}========================================${NC}"
+}
+
+detect_distro() {
+    if [ -f /etc/os-release ]; then
+        grep "^ID=" /etc/os-release | cut -d'=' -f2 | tr -d '"'
+    else
+        echo "unknown"
+    fi
+}
+
+configure_proxy() {
+    log_info "检查代理配置..."
+    
+    local proxy_set=false
+    
+    if [ -n "$http_proxy" ] || [ -n "$https_proxy" ]; then
+        log_success "检测到系统代理配置"
+        log_info "HTTP_PROXY: $http_proxy"
+        log_info "HTTPS_PROXY: $https_proxy"
+        proxy_set=true
+    fi
+    
+    if [ -f "$HOME/.gitconfig" ] && grep -q "proxy" "$HOME/.gitconfig" 2>/dev/null; then
+        log_success "检测到 Git 代理配置"
+        proxy_set=true
+    fi
+    
+    if [ "$proxy_set" = false ]; then
+        log_warning "未检测到代理配置"
+        log_info "如果网络访问 GitHub 较慢，建议配置代理"
+        log_info "例如: export https_proxy=http://127.0.0.1:7890"
+        
+        read -p "是否需要配置代理? (y/N): " -n 1 -r
+        echo
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            read -p "请输入代理地址 (例如: http://127.0.0.1:7890): " proxy_url
+            if [ -n "$proxy_url" ]; then
+                export http_proxy="$proxy_url"
+                export https_proxy="$proxy_url"
+                export HTTP_PROXY="$proxy_url"
+                export HTTPS_PROXY="$proxy_url"
+                
+                git config --global http.proxy "$proxy_url"
+                git config --global https.proxy "$proxy_url"
+                
+                log_success "代理已配置: $proxy_url"
+            fi
+        fi
+    fi
+    
+    echo "PROXY_CONFIGURED=$proxy_set" >> "$LOG_FILE"
+}
+
+update_package_list() {
+    log_info "更新软件包列表..."
+    
+    local distro
+    distro=$(detect_distro)
+    
+    case "$distro" in
+        ubuntu|debian)
+            sudo apt-get update 2>&1 | tee -a "$LOG_FILE"
+            ;;
+        fedora)
+            sudo dnf check-update 2>&1 | tee -a "$LOG_FILE" || true
+            ;;
+        arch)
+            sudo pacman -Sy 2>&1 | tee -a "$LOG_FILE"
+            ;;
+        *)
+            log_warning "未知的发行版，尝试使用 apt"
+            sudo apt-get update 2>&1 | tee -a "$LOG_FILE"
+            ;;
+    esac
+    
+    log_success "软件包列表已更新"
+}
+
+install_dependencies() {
+    log_info "安装编译依赖..."
+    
+    local distro
+    distro=$(detect_distro)
+    
+    local packages_ubuntu=(
+        build-essential
+        flex
+        bison
+        libssl-dev
+        libelf-dev
+        bc
+        dwarves
+        cpio
+        kmod
+        libncurses5-dev
+        libncursesw5-dev
+        git
+        wget
+        curl
+        python3
+        python3-pip
+        fakeroot
+        gnupg2
+        lsb-release
+        software-properties-common
+        apt-transport-https
+        ca-certificates
+    )
+    
+    local packages_fedora=(
+        make
+        gcc
+        gcc-c++
+        flex
+        bison
+        openssl-devel
+        elfutils-libelf-devel
+        bc
+        dwarves
+        cpio
+        kmod
+        ncurses-devel
+        git
+        wget
+        curl
+        python3
+        python3-pip
+        fakeroot
+        gnupg2
+        redhat-lsb-core
+    )
+    
+    local packages_arch=(
+        base-devel
+        flex
+        bison
+        openssl
+        libelf
+        bc
+        dwarves
+        cpio
+        kmod
+        ncurses
+        git
+        wget
+        curl
+        python
+        python-pip
+        fakeroot
+        gnupg
+        lsb-release
+    )
+    
+    case "$distro" in
+        ubuntu|debian)
+            log_info "安装 Ubuntu/Debian 依赖包..."
+            sudo apt-get install -y "${packages_ubuntu[@]}" 2>&1 | tee -a "$LOG_FILE"
+            ;;
+        fedora)
+            log_info "安装 Fedora 依赖包..."
+            sudo dnf install -y "${packages_fedora[@]}" 2>&1 | tee -a "$LOG_FILE"
+            ;;
+        arch)
+            log_info "安装 Arch Linux 依赖包..."
+            sudo pacman -S --needed "${packages_arch[@]}" 2>&1 | tee -a "$LOG_FILE"
+            ;;
+        *)
+            log_warning "未知的发行版，尝试安装 Ubuntu 依赖"
+            sudo apt-get install -y "${packages_ubuntu[@]}" 2>&1 | tee -a "$LOG_FILE"
+            ;;
+    esac
+    
+    log_success "依赖包安装完成"
+}
+
+verify_installation() {
+    log_info "验证安装..."
+    
+    local tools=(
+        "gcc:gcc --version"
+        "make:make --version"
+        "flex:flex --version"
+        "bison:bison --version"
+        "git:git --version"
+        "bc:bc --version"
+    )
+    
+    local all_installed=true
+    
+    for tool_info in "${tools[@]}"; do
+        IFS=':' read -r tool_name check_cmd <<< "$tool_info"
+        if eval "$check_cmd" > /dev/null 2>&1; then
+            local version
+            version=$(eval "$check_cmd" 2>/dev/null | head -1)
+            log_success "$tool_name: $version"
+        else
+            log_error "$tool_name: 未安装"
+            all_installed=false
+        fi
+    done
+    
+    if [ "$all_installed" = true ]; then
+        log_success "所有工具验证通过"
+        return 0
+    else
+        log_error "部分工具未正确安装"
+        return 1
+    fi
+}
+
+check_compiler_version() {
+    log_info "检查编译器版本..."
+    
+    local gcc_version
+    gcc_version=$(gcc --version | head -1)
+    log_success "GCC: $gcc_version"
+    
+    local make_version
+    make_version=$(make --version | head -1)
+    log_success "Make: $make_version"
+    
+    echo "GCC_VERSION=$gcc_version" >> "$LOG_FILE"
+    echo "MAKE_VERSION=$make_version" >> "$LOG_FILE"
+}
+
+main() {
+    print_header
+    
+    log_info "开始安装编译依赖..."
+    log_info "日志文件: $LOG_FILE"
+    echo "" | tee -a "$LOG_FILE"
+    
+    configure_proxy
+    echo "" | tee -a "$LOG_FILE"
+    
+    update_package_list
+    echo "" | tee -a "$LOG_FILE"
+    
+    install_dependencies
+    echo "" | tee -a "$LOG_FILE"
+    
+    check_compiler_version
+    echo "" | tee -a "$LOG_FILE"
+    
+    if verify_installation; then
+        echo "" | tee -a "$LOG_FILE"
+        log_success "所有依赖安装完成"
+        log_info "可以继续执行下一步: bash 03-build-kernel.sh"
+        print_footer
+        exit 0
+    else
+        echo "" | tee -a "$LOG_FILE"
+        log_error "依赖安装验证失败"
+        print_footer
+        exit 1
+    fi
+}
+
+main "$@"
