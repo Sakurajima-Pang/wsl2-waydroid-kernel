@@ -64,7 +64,7 @@ get_windows_userprofile() {
     local win_userprofile="$(cmd.exe /c "echo %USERPROFILE%" 2>/dev/null | tr -d '\r')"
     # 转换为 WSL 路径格式: C:\Users\Username -> /mnt/c/Users/Username
     # 使用 tr 转换反斜杠，使用 sed 转换盘符 (不区分大小写)
-    local wsl_path="$(echo "$win_userprofile" | tr '\\' '/' | sed 's|^[Cc]:|/mnt/c|' | sed 's|^[Dd]:|/mnt/d|')"
+    local wsl_path="$(echo "$win_userprofile" | tr '\\' '/' | sed 's/^[Cc]:/\/mnt\/c/' | sed 's/^[Dd]:/\/mnt\/d/')"
     echo "$wsl_path"
 }
 
@@ -257,7 +257,7 @@ restore_from_backup() {
     # 确保 WSL 配置正确
     local wsl_userprofile=$(get_windows_userprofile)
     local wslconfig_path="${wsl_userprofile}/.wslconfig"
-    local win_path=$(echo "${WIN_KERNEL_PATH}" | sed 's|/mnt/c/|C:\\|' | sed 's|/|\\|g')
+    local win_path=$(echo "${WIN_KERNEL_PATH}" | sed 's|/mnt/c/|C:\\\\|' | sed 's|/|\\\\|g')
 
     if [ ! -f "$wslconfig_path" ] 2>/dev/null; then
         log_info "创建 WSL 配置文件..."

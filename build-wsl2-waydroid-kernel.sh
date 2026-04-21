@@ -47,12 +47,17 @@ check_wsl2() {
 # 检查磁盘空间
 check_disk_space() {
     log_step "检查磁盘空间..."
-    local available=$(df /home | tail -1 | awk '{print $4}')
+    # 检查构建目录所在分区的可用空间
+    local build_dir="${KERNEL_BUILD_DIR:-$HOME/wsl2-kernel-build}"
+    # 确保目录存在以便 df 可以正确检查
+    mkdir -p "$build_dir" 2>/dev/null || true
+    local available=$(df "$build_dir" | tail -1 | awk '{print $4}')
     local required=20971520 # 20GB in KB (预计算避免溢出)
     local available_gb=$((available / 1024 / 1024))
-    
+
+    log_info "构建目录: $build_dir"
     log_info "可用磁盘空间: ${available_gb}GB"
-    
+
     if [ "$available" -lt "$required" ]; then
         log_error "磁盘空间不足。需要至少 20GB，当前可用: ${available_gb}GB"
         log_error "请清理磁盘空间后重试"

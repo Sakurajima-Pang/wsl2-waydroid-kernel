@@ -20,10 +20,10 @@ PASS_COUNT=0
 FAIL_COUNT=0
 WARN_COUNT=0
 
-# 使用 let 命令进行算术运算，避免 set -e 在结果为0时退出
-increment_pass() { let PASS_COUNT++; }
-increment_fail() { let FAIL_COUNT++; }
-increment_warn() { let WARN_COUNT++; }
+# 使用算术扩展进行递增，避免 set -e 在结果为0时退出
+increment_pass() { PASS_COUNT=$((PASS_COUNT + 1)); }
+increment_fail() { FAIL_COUNT=$((FAIL_COUNT + 1)); }
+increment_warn() { WARN_COUNT=$((WARN_COUNT + 1)); }
 
 # 日志函数
 log_pass() {
@@ -122,7 +122,7 @@ check_binder() {
         if [ -e "$device" ]; then
             local perms=$(ls -la "$device" 2>/dev/null | awk '{print $1, $3, $4}')
             log_pass "$device 存在 ($perms)"
-            found_count=$((found_count+1))
+            found_count=$((found_count + 1))
         else
             log_fail "$device 不存在"
         fi

@@ -262,12 +262,17 @@ check_wsl2() {
 # 检查磁盘空间
 check_disk_space() {
     log_step "检查磁盘空间..."
-    local available=$(df /home | tail -1 | awk '{print $4}')
+    # 检查构建目录所在分区的可用空间
+    local build_dir="${KERNEL_BUILD_DIR:-$HOME/wsl2-kernel-build}"
+    # 确保目录存在以便 df 可以正确检查
+    mkdir -p "$build_dir" 2>/dev/null || true
+    local available=$(df "$build_dir" | tail -1 | awk '{print $4}')
     local required=20971520 # 20GB in KB (预计算避免溢出)
     local available_gb=$((available / 1024 / 1024))
-    
+
+    log_info "构建目录: $build_dir"
     log_info "可用磁盘空间: ${available_gb}GB"
-    
+
     if [ "$available" -lt "$required" ]; then
         log_error "磁盘空间不足。需要至少 20GB，当前可用: ${available_gb}GB"
         log_error "请清理磁盘空间后重试"
@@ -840,10 +845,10 @@ PASS_COUNT=0
 FAIL_COUNT=0
 WARN_COUNT=0
 
-# 使用 let 命令进行算术运算，避免 set -e 在结果为0时退出
-increment_pass() { let PASS_COUNT++; }
-increment_fail() { let FAIL_COUNT++; }
-increment_warn() { let WARN_COUNT++; }
+# 使用算术扩展进行递增，避免 set -e 在结果为0时退出
+increment_pass() { PASS_COUNT=$((PASS_COUNT + 1)); }
+increment_fail() { FAIL_COUNT=$((FAIL_COUNT + 1)); }
+increment_warn() { WARN_COUNT=$((WARN_COUNT + 1)); }
 
 # 日志函数
 log_pass() {
@@ -942,7 +947,7 @@ check_binder() {
         if [ -e "$device" ]; then
             local perms=$(ls -la "$device" 2>/dev/null | awk '{print $1, $3, $4}')
             log_pass "$device 存在 ($perms)"
-            let found_count++
+            found_count=$((found_count + 1))
         else
             log_fail "$device 不存在"
         fi
@@ -1292,7 +1297,8 @@ check_wsl2() {
 get_windows_userprofile() {
     local win_userprofile="$(cmd.exe /c "echo %USERPROFILE%" 2>/dev/null | tr -d '\r')"
     # 转换为 WSL 路径格式: C:\Users\Username -> /mnt/c/Users/Username
-    local wsl_path="$(echo "$win_userprofile" | sed 's|\\|/|g' | sed 's|^C:|/mnt/c|i' | sed 's|^D:|/mnt/d|i')"
+    # 使用 tr 转换反斜杠，使用 sed 转换盘符 (不区分大小写)
+    local wsl_path="$(echo "$win_userprofile" | tr '\\' '/' | sed 's/^[Cc]:/\/mnt\/c/' | sed 's/^[Dd]:/\/mnt\/d/')"
     echo "$wsl_path"
 }
 
@@ -1485,13 +1491,13 @@ restore_from_backup() {
     # 确保 WSL 配置正确
     local wsl_userprofile=$(get_windows_userprofile)
     local wslconfig_path="${wsl_userprofile}/.wslconfig"
-    local win_path_escaped=$(echo "${WIN_KERNEL_PATH}" | sed 's|/mnt/c/|C:\\\\|' | sed 's|/|\\\\|g')
+    local win_path=$(echo "${WIN_KERNEL_PATH}" | sed 's|/mnt/c/|C:\\\\|' | sed 's|/|\\\\|g')
 
     if [ ! -f "$wslconfig_path" ] 2>/dev/null; then
         log_info "创建 WSL 配置文件..."
         cat > "$wslconfig_path" << EOF
 [wsl2]
-kernel=${win_path_escaped}\\\\bzImage-waydroid
+kernel=${win_path}\\bzImage-waydroid
 memory=8GB
 processors=4
 swap=2GB
