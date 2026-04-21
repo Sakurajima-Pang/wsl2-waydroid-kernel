@@ -3,8 +3,6 @@
 set -e
 
 # WSL2 Waydroid 内核一键编译脚本
-# 作者: AI Assistant
-# 版本: 1.0
 
 # 颜色定义
 RED='\033[0;31m'
@@ -99,14 +97,20 @@ install_dependencies() {
         "wget"
         "python3"
         "python3-pip"
+        "ccache"
     )
-    
+
     log_info "更新软件包列表..."
     sudo apt update
-    
+
     log_info "安装依赖包..."
     sudo apt install -y "${deps[@]}"
-    
+
+    # 配置 ccache 加速重复编译
+    log_info "配置 ccache..."
+    ccache --max-size=5G
+    export PATH="/usr/lib/ccache:$PATH"
+
     log_info "依赖安装完成"
 }
 
