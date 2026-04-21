@@ -59,10 +59,12 @@ check_wsl2() {
     fi
 }
 
-# 获取 Windows 用户目录
+# 获取 Windows 用户目录（转换为 WSL 路径格式）
 get_windows_userprofile() {
     local win_userprofile="$(cmd.exe /c "echo %USERPROFILE%" 2>/dev/null | tr -d '\r')"
-    echo "$win_userprofile"
+    # 转换为 WSL 路径格式: C:\Users\Username -> /mnt/c/Users/Username
+    local wsl_path="$(echo "$win_userprofile" | sed 's|\\|/|g' | sed 's|^C:|/mnt/c|i' | sed 's|^D:|/mnt/d|i')"
+    echo "$wsl_path"
 }
 
 # 关闭 WSL2
@@ -94,27 +96,27 @@ shutdown_wsl() {
 # 选项 1: 临时回滚到默认内核
 temp_rollback() {
     log_step "临时回滚到默认内核"
-    
-    local win_userprofile=$(get_windows_userprofile)
-    local wslconfig_path="${win_userprofile}\\.wslconfig"
-    
+
+    local wsl_userprofile=$(get_windows_userprofile)
+    local wslconfig_path="${wsl_userprofile}/.wslconfig"
+
     log_info "WSL 配置文件路径: $wslconfig_path"
-    
+
     # 检查配置文件是否存在
-    if [ ! -f "/mnt/c${wslconfig_path#C:}" ] 2>/dev/null; then
+    if [ ! -f "$wslconfig_path" ] 2>/dev/null; then
         log_warn "WSL 配置文件不存在"
         log_info "当前已经在使用默认内核"
         return
     fi
-    
+
     # 备份当前配置
     local backup_path="${wslconfig_path}.backup.$(date +%Y%m%d%H%M%S)"
     log_info "备份当前配置到: $backup_path"
-    cp "/mnt/c${wslconfig_path#C:}" "/mnt/c${backup_path#C:}" 2>/dev/null || true
-    
+    cp "$wslconfig_path" "$backup_path" 2>/dev/null || true
+
     # 注释掉 kernel 行
     log_info "修改 WSL 配置..."
-    sed -i 's/^kernel=/# kernel=/' "/mnt/c${wslconfig_path#C:}" 2>/dev/null || {
+    sed -i 's/^kernel=/# kernel=/' "$wslconfig_path" 2>/dev/null || {
         log_error "无法修改配置文件"
         log_info "请手动编辑文件: $wslconfig_path"
         log_info "将 kernel= 行注释掉或删除"
@@ -134,11 +136,11 @@ temp_rollback() {
 # 选项 2: 完全删除自定义内核
 full_rollback() {
     log_step "完全删除自定义内核"
-    
-    local win_userprofile=$(get_windows_userprofile)
-    local wslconfig_path="${win_userprofile}\\.wslconfig"
+
+    local wsl_userprofile=$(get_windows_userprofile)
+    local wslconfig_path="${wsl_userprofile}/.wslconfig"
     local kernel_dir="${WIN_KERNEL_PATH}"
-    
+
     log_warn "此操作将:"
     log_warn "  - 删除自定义内核文件"
     log_warn "  - 删除 WSL 配置文件"
@@ -146,12 +148,12 @@ full_rollback() {
     echo ""
     read -p "是否继续? (y/N): " -n 1 -r
     echo
-    
+
     if [[ ! $REPLY =~ ^[Yy]$ ]]; then
         log_info "操作已取消"
         return
     fi
-    
+
     # 备份并删除内核目录
     if [ -d "$kernel_dir" ]; then
         local backup_dir="/mnt/c/wsl2-kernel-backup-$(date +%Y%m%d%H%M%S)"
@@ -159,15 +161,15 @@ full_rollback() {
         mv "$kernel_dir" "$backup_dir"
         log_info "内核目录已备份并删除"
     fi
-    
+
     # 删除或清空 WSL 配置
-    if [ -f "/mnt/c${wslconfig_path#C:}" ] 2>/dev/null; then
+    if [ -f "$wslconfig_path" ] 2>/dev/null; then
         local config_backup="${wslconfig_path}.backup.$(date +%Y%m%d%H%M%S)"
         log_info "备份 WSL 配置到: $config_backup"
-        cp "/mnt/c${wslconfig_path#C:}" "/mnt/c${config_backup#C:}" 2>/dev/null || true
-        
+        cp "$wslconfig_path" "$config_backup" 2>/dev/null || true
+
         log_info "删除 WSL 配置文件..."
-        rm -f "/mnt/c${wslconfig_path#C:}"
+        rm -f "$wslconfig_path"
         log_info "WSL 配置已删除"
     fi
     
@@ -252,13 +254,13 @@ restore_from_backup() {
     log_info "内核已恢复"
     
     # 确保 WSL 配置正确
-    local win_userprofile=$(get_windows_userprofile)
-    local wslconfig_path="${win_userprofile}\\.wslconfig"
+    local wsl_userprofile=$(get_windows_userprofile)
+    local wslconfig_path="${wsl_userprofile}/.wslconfig"
     local win_path_escaped=$(echo "${WIN_KERNEL_PATH}" | sed 's|/mnt/c/|C:\\\\|' | sed 's|/|\\\\|g')
-    
-    if [ ! -f "/mnt/c${wslconfig_path#C:}" ] 2>/dev/null; then
+
+    if [ ! -f "$wslconfig_path" ] 2>/dev/null; then
         log_info "创建 WSL 配置文件..."
-        cat > "/mnt/c${wslconfig_path#C:}" << EOF
+        cat > "$wslconfig_path" << EOF
 [wsl2]
 kernel=${win_path_escaped}\\\\bzImage-waydroid
 memory=8GB
@@ -297,15 +299,15 @@ show_kernel_info() {
     echo "启动镜像: $kernel_path"
     
     # 检查 WSL 配置
-    local win_userprofile=$(get_windows_userprofile)
-    local wslconfig_path="${win_userprofile}\\.wslconfig"
-    
+    local wsl_userprofile=$(get_windows_userprofile)
+    local wslconfig_path="${wsl_userprofile}/.wslconfig"
+
     echo ""
     echo "WSL 配置文件:"
-    if [ -f "/mnt/c${wslconfig_path#C:}" ] 2>/dev/null; then
+    if [ -f "$wslconfig_path" ] 2>/dev/null; then
         echo "  路径: $wslconfig_path"
         echo "  内容:"
-        cat "/mnt/c${wslconfig_path#C:}" | sed 's/^/    /'
+        cat "$wslconfig_path" | sed 's/^/    /'
     else
         echo "  未找到配置文件 (使用默认设置)"
     fi
@@ -357,9 +359,10 @@ show_backups() {
     
     # 查找配置备份
     echo "WSL 配置备份:"
-    local win_userprofile=$(get_windows_userprofile)
-    local config_backups=$(find /mnt/c -name ".wslconfig.backup.*" 2>/dev/null || true)
-    
+    local wsl_userprofile=$(get_windows_userprofile)
+    local config_backup_dir="$(dirname "$wsl_userprofile")"
+    local config_backups=$(find "$config_backup_dir" -name ".wslconfig.backup.*" 2>/dev/null || true)
+
     if [ -n "$config_backups" ]; then
         echo "$config_backups" | while read file; do
             local name=$(basename "$file")

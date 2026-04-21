@@ -124,7 +124,7 @@ download_kernel() {
         if [[ $REPLY =~ ^[Yy]$ ]]; then
             log_info "删除旧目录..."
             rm -rf WSL2-Linux-Kernel
-            git clone --depth 1 https://github.com/microsoft/WSL2-Linux-Kernel.git
+            git clone https://github.com/microsoft/WSL2-Linux-Kernel.git
         else
             log_info "更新现有仓库..."
             cd WSL2-Linux-Kernel
@@ -132,7 +132,7 @@ download_kernel() {
         fi
     else
         log_info "克隆内核仓库..."
-        git clone --depth 1 https://github.com/microsoft/WSL2-Linux-Kernel.git
+        git clone https://github.com/microsoft/WSL2-Linux-Kernel.git
     fi
     
     cd WSL2-Linux-Kernel
@@ -183,28 +183,26 @@ configure_kernel() {
     # 启用 Waydroid 所需模块
     log_info "启用 Waydroid 内核模块..."
     
-    # 定义需要启用的配置
+    # 定义需要启用的配置（布尔值类型）
     declare -a enable_configs=(
         "CONFIG_ANDROID"
         "CONFIG_ANDROID_BINDER_IPC"
         "CONFIG_ANDROID_BINDERFS"
         "CONFIG_ASHMEM"
-        "CONFIG_ANDROID_SIMPLE_LMK"
-        "CONFIG_SW_SYNC"
-        "CONFIG_SYNC_FILE"
         "CONFIG_BINDERFS"
         "CONFIG_MEMCG"
         "CONFIG_CGROUP_DEVICE"
     )
-    
+
     for cfg in "${enable_configs[@]}"; do
         # 删除旧配置
-        sed -i "/^${cfg}/d" .config
+        sed -i "/^${cfg}=/d" .config
         # 添加新配置
         echo "${cfg}=y" >> .config
     done
-    
-    # 添加 binder 设备配置
+
+    # 添加 binder 设备配置（字符串类型）
+    sed -i '/^CONFIG_ANDROID_BINDER_DEVICES=/d' .config
     echo 'CONFIG_ANDROID_BINDER_DEVICES="binder,hwbinder,vndbinder"' >> .config
     
     # 更新配置
@@ -241,21 +239,23 @@ compile_kernel() {
     log_info "编译日志: ${build_log}"
     
     # 编译
-    if make -j"${cpu_count}" 2>&1 | tee "${build_log}" | while read line; do
-        echo "$line" | grep -E "^(  CC|  LD|  AR|  CHK|Kernel:|Building)" | head -5
-    done; then
+    log_info "开始编译，显示关键进度信息..."
+    make -j"${cpu_count}" 2>&1 | tee "${build_log}"
+    local make_exit_code=${PIPESTATUS[0]}
+
+    if [ $make_exit_code -eq 0 ]; then
         local end_time=$(date +%s)
         local duration=$((end_time - start_time))
         local minutes=$((duration / 60))
         local seconds=$((duration % 60))
-        
+
         log_info "内核编译成功！"
         log_info "编译耗时: ${minutes} 分 ${seconds} 秒"
         # 保留成功的编译日志
         cp "${build_log}" "${WIN_KERNEL_PATH}/build.log" 2>/dev/null || true
         rm -f "${build_log}"
     else
-        log_error "内核编译失败"
+        log_error "内核编译失败 (退出码: $make_exit_code)"
         log_error "请查看 ${build_log} 了解详细错误信息"
         exit 1
     fi

@@ -95,15 +95,14 @@ make oldconfig
 ./scripts/config --enable CONFIG_ANDROID_BINDER_IPC
 ./scripts/config --enable CONFIG_ANDROID_BINDERFS
 ./scripts/config --enable CONFIG_ASHMEM
-./scripts/config --enable CONFIG_ANDROID_SIMPLE_LMK
-./scripts/config --enable CONFIG_SW_SYNC
-./scripts/config --enable CONFIG_SYNC_FILE
 
-# 额外需要的配置
+# 额外需要的配置（使用sed直接修改.config，因为scripts/config不支持字符串配置）
 ./scripts/config --enable CONFIG_BINDERFS
-./scripts/config --enable CONFIG_ANDROID_BINDER_DEVICES="binder,hwbinder,vndbinder"
 ./scripts/config --enable CONFIG_MEMCG
 ./scripts/config --enable CONFIG_CGROUP_DEVICE
+
+# 添加binder设备配置（字符串类型配置）
+echo 'CONFIG_ANDROID_BINDER_DEVICES="binder,hwbinder,vndbinder"' >> .config
 
 # 验证配置
 grep -E "CONFIG_ANDROID|CONFIG_ASHMEM|CONFIG_BINDER" .config
@@ -298,23 +297,26 @@ configure_kernel() {
     # 启用 Waydroid 所需模块
     log_info "启用 Waydroid 内核模块..."
     
+    # 布尔值配置
     declare -a configs=(
-        "CONFIG_ANDROID=y"
-        "CONFIG_ANDROID_BINDER_IPC=y"
-        "CONFIG_ANDROID_BINDERFS=y"
-        "CONFIG_ASHMEM=y"
-        "CONFIG_ANDROID_SIMPLE_LMK=y"
-        "CONFIG_SW_SYNC=y"
-        "CONFIG_SYNC_FILE=y"
-        "CONFIG_BINDERFS=y"
-        "CONFIG_ANDROID_BINDER_DEVICES=\"binder,hwbinder,vndbinder\""
-        "CONFIG_MEMCG=y"
-        "CONFIG_CGROUP_DEVICE=y"
+        "CONFIG_ANDROID"
+        "CONFIG_ANDROID_BINDER_IPC"
+        "CONFIG_ANDROID_BINDERFS"
+        "CONFIG_ASHMEM"
+        "CONFIG_BINDERFS"
+        "CONFIG_MEMCG"
+        "CONFIG_CGROUP_DEVICE"
     )
     
     for cfg in "${configs[@]}"; do
-        echo "$cfg" >> .config
+        # 删除旧配置并添加新配置
+        sed -i "/^${cfg}=/d" .config
+        echo "${cfg}=y" >> .config
     done
+    
+    # 添加binder设备配置（字符串类型）
+    sed -i '/^CONFIG_ANDROID_BINDER_DEVICES=/d' .config
+    echo 'CONFIG_ANDROID_BINDER_DEVICES="binder,hwbinder,vndbinder"' >> .config
     
     # 更新配置
     make olddefconfig
@@ -427,13 +429,18 @@ uname -r
 
 # 应该显示自定义编译的版本，例如:
 # 5.15.90.1-microsoft-standard-WSL2
-
+```bash
 # 检查内核编译时间（确认是新内核）
 cat /proc/version
 
 # 验证关键模块是否已启用
-grep -E "CONFIG_ANDROID|CONFIG_ASHMEM|CONFIG_BINDER" /boot/config-$(uname -r) 2>/dev/null || \
-grep -E "CONFIG_ANDROID|CONFIG_ASHMEM|CONFIG_BINDER" /proc/config.gz 2>/dev/null | zcat
+if [ -f /boot/config-$(uname -r) ]; then
+    grep -E "CONFIG_ANDROID|CONFIG_ASHMEM|CONFIG_BINDER" /boot/config-$(uname -r)
+elif [ -f /proc/config.gz ]; then
+    zcat /proc/config.gz | grep -E "CONFIG_ANDROID|CONFIG_ASHMEM|CONFIG_BINDER"
+else
+    echo "无法找到内核配置文件"
+fi
 ```
 
 ### 2. 验证 Waydroid 支持
@@ -544,12 +551,14 @@ echo ""
 echo "7. 检查内核配置:"
 if [ -f /proc/config.gz ]; then
     for cfg in CONFIG_ANDROID CONFIG_ANDROID_BINDER_IPC CONFIG_ANDROID_BINDERFS CONFIG_ASHMEM; do
-        if zcat /proc/config.gz | grep -q "^${cfg}=y"; then
+        if zcat /proc/config.gz 2>/dev/null | grep -q "^${cfg}=y"; then
             echo -e "${GREEN}✓ ${cfg}=y${NC}"
         else
             echo -e "${RED}✗ ${cfg} 未启用${NC}"
         fi
     done
+else
+    echo "无法找到 /proc/config.gz"
 fi
 echo ""
 

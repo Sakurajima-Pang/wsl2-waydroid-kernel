@@ -84,8 +84,6 @@ check_kernel_config() {
         "CONFIG_ANDROID_BINDER_IPC"
         "CONFIG_ANDROID_BINDERFS"
         "CONFIG_ASHMEM"
-        "CONFIG_SW_SYNC"
-        "CONFIG_SYNC_FILE"
     )
     
     for cfg in "${required_configs[@]}"; do
