@@ -113,8 +113,8 @@ else
     cp Microsoft/config-wsl .config
 fi
 
-# 确保配置是最新的
-make oldconfig
+# 确保配置是最新的 (使用 olddefconfig 避免交互式提示)
+make olddefconfig
 ```
 
 ### 步骤 4: 启用 Waydroid 所需的内核模块
@@ -835,25 +835,30 @@ NC='\033[0m' # No Color
 # 配置路径（可自定义）
 WIN_KERNEL_PATH="${WIN_KERNEL_PATH:-/mnt/c/wsl2-kernel}"
 
-# 计数器
+# 计数器 (初始化确保 set -e 不会导致退出)
 PASS_COUNT=0
 FAIL_COUNT=0
 WARN_COUNT=0
 
+# 使用 let 命令进行算术运算，避免 set -e 在结果为0时退出
+increment_pass() { let PASS_COUNT++; }
+increment_fail() { let FAIL_COUNT++; }
+increment_warn() { let WARN_COUNT++; }
+
 # 日志函数
 log_pass() {
     echo -e "${GREEN}[PASS]${NC} $1"
-    ((PASS_COUNT++))
+    increment_pass
 }
 
 log_fail() {
     echo -e "${RED}[FAIL]${NC} $1"
-    ((FAIL_COUNT++))
+    increment_fail
 }
 
 log_warn() {
     echo -e "${YELLOW}[WARN]${NC} $1"
-    ((WARN_COUNT++))
+    increment_warn
 }
 
 log_info() {
@@ -864,16 +869,16 @@ log_info() {
 check_kernel() {
     echo ""
     log_info "========== 1. 内核版本检查 =========="
-    
+
     local kernel_version=$(uname -r)
     echo "当前内核版本: $kernel_version"
-    
+
     if echo "$kernel_version" | grep -q "microsoft"; then
         log_pass "WSL2 内核运行正常"
     else
         log_fail "当前不是 WSL2 内核"
     fi
-    
+
     # 检查内核编译时间
     local version_info=$(cat /proc/version)
     echo "内核详细信息: $version_info"
@@ -883,21 +888,21 @@ check_kernel() {
 check_kernel_config() {
     echo ""
     log_info "========== 2. 内核配置检查 =========="
-    
+
     local config_source=""
     if [ -f /proc/config.gz ]; then
         config_source="/proc/config.gz"
     elif [ -f "/boot/config-$(uname -r)" ]; then
         config_source="/boot/config-$(uname -r)"
     fi
-    
+
     if [ -z "$config_source" ]; then
         log_warn "找不到内核配置文件"
         return
     fi
-    
+
     log_info "使用配置源: $config_source"
-    
+
     # 定义需要检查的配置
     declare -a required_configs=(
         "CONFIG_ANDROID"
@@ -905,7 +910,7 @@ check_kernel_config() {
         "CONFIG_ANDROID_BINDERFS"
         "CONFIG_ASHMEM"
     )
-    
+
     for cfg in "${required_configs[@]}"; do
         local result
         if [ "$config_source" = "/proc/config.gz" ]; then
@@ -913,7 +918,7 @@ check_kernel_config() {
         else
             result=$(grep "^${cfg}=" "$config_source" || echo "")
         fi
-        
+
         if echo "$result" | grep -q "=y"; then
             log_pass "$result"
         elif echo "$result" | grep -q "=m"; then
@@ -937,7 +942,7 @@ check_binder() {
         if [ -e "$device" ]; then
             local perms=$(ls -la "$device" 2>/dev/null | awk '{print $1, $3, $4}')
             log_pass "$device 存在 ($perms)"
-            ((found_count++))
+            let found_count++
         else
             log_fail "$device 不存在"
         fi

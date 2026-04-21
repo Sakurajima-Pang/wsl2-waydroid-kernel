@@ -325,8 +325,8 @@ generate_wsl_config() {
         cpu_limit=2
     fi
     
-    # 获取Windows路径格式
-    local win_path_escaped=$(echo "${WIN_KERNEL_PATH}" | sed 's|/mnt/c/|C:\\\\|' | sed 's|/|\\\\|g')
+    # 获取Windows路径格式 (将 /mnt/c/path 转换为 C:\path 格式)
+    local win_path_escaped=$(echo "${WIN_KERNEL_PATH}" | sed 's|/mnt/c/|C:\\|' | sed 's|/|\\|g')
     
     cat > "$config_file" << EOF
 # WSL2 配置文件
