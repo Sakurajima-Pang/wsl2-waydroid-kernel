@@ -1,12 +1,32 @@
-# WSL2 Waydroid 内核编译完整指南
+# WSL2 Waydroid 内核编译与部署完整指南
 
 ## 目录
-1. [环境准备](#环境准备)
-2. [编译步骤](#编译步骤)
-3. [自动化脚本](#自动化脚本)
+1. [部署需求概览](#部署需求概览)
+2. [环境准备](#环境准备)
+3. [部署任务](#部署任务)
+   - 任务1: 检查 WSL2 环境状态
+   - 任务2: 编译并安装自定义内核
+   - 任务3: 配置 WSL2 使用新内核
+   - 任务4: 安装 Waydroid 容器环境
+   - 任务5: 安装 Android APK 应用
+   - 任务6: 启动并验证应用运行
 4. [验证方法](#验证方法)
 5. [回滚方案](#回滚方案)
 6. [常见问题排查](#常见问题排查)
+7. [网络代理配置](#网络代理配置)
+
+---
+
+## 部署需求概览
+
+本文档指导您完成在 WSL2 中部署 Waydroid 的完整流程，包含以下6个部署任务：
+
+1. **检查当前 WSL2 环境状态** - 验证系统兼容性和资源
+2. **编译并安装支持 Waydroid 的自定义内核** - 启用必要的内核模块
+3. **配置 WSL2 使用新内核** - 设置 .wslconfig 文件
+4. **安装 Waydroid 容器环境** - 初始化 Android 容器
+5. **安装指定的 Android APK 应用** - 部署目标应用
+6. **启动并验证应用运行** - 确保一切正常工作
 
 ---
 
@@ -17,7 +37,7 @@
   - **注意**: Build 19045 (22H2) 完全支持，满足最低版本要求
 - WSL2 已安装并配置
 - 至少 20GB 可用磁盘空间
-- 稳定的网络连接
+- 稳定的网络连接（可能需要代理）
 
 ### 重要提示
 在开始编译前，建议备份当前 WSL2 配置：
@@ -66,17 +86,71 @@ echo 'export PATH="/usr/lib/ccache:$PATH"' >> ~/.bashrc
 
 ---
 
-## 编译步骤
+## 部署任务
 
-### 步骤 1: 创建工作目录
+### 任务1: 检查 WSL2 环境状态
 
+#### 1.1 验证 WSL2 环境
+```bash
+# 检查是否在 WSL2 中运行
+if grep -q "microsoft" /proc/version 2>/dev/null || grep -q "WSL" /proc/version 2>/dev/null; then
+    echo "✓ WSL2 环境检测通过"
+    echo "当前内核版本: $(uname -r)"
+else
+    echo "✗ 此操作必须在 WSL2 环境中运行"
+    exit 1
+fi
+```
+
+#### 1.2 检查磁盘空间
+```bash
+# 检查可用磁盘空间（需要至少 20GB）
+available=$(df / | tail -1 | awk '{print $4}')
+required_gb=20
+available_gb=$((available / 1024 / 1024))
+
+echo "可用磁盘空间: ${available_gb}GB"
+if [ "$available_gb" -lt "$required_gb" ]; then
+    echo "✗ 磁盘空间不足。需要至少 ${required_gb}GB"
+    exit 1
+else
+    echo "✓ 磁盘空间检查通过"
+fi
+```
+
+#### 1.3 检查内存
+```bash
+# 检查内存（建议至少 4GB）
+mem_gb=$(free -g | awk '/^Mem:/{print $2}')
+if [ "$mem_gb" -ge 4 ]; then
+    echo "✓ 内存充足 (${mem_gb}GB)"
+else
+    echo "⚠ 内存可能不足 (${mem_gb}GB)，建议至少 4GB"
+fi
+```
+
+#### 1.4 网络连接测试
+```bash
+# 测试网络连接
+if ping -c 1 github.com &>/dev/null; then
+    echo "✓ 网络连接正常"
+else
+    echo "⚠ 无法连接到 GitHub，可能需要配置代理"
+    echo "参考文档中的'网络代理配置'部分"
+fi
+```
+
+---
+
+### 任务2: 编译并安装支持 Waydroid 的自定义内核
+
+#### 步骤 1: 创建工作目录
 ```bash
 mkdir -p ~/wsl2-kernel-build
 cd ~/wsl2-kernel-build
 ```
 
-### 步骤 2: 下载 WSL2 内核源码
-
+#### 步骤 2: 下载 WSL2 内核源码
 ```bash
 # 获取当前 WSL2 内核版本
 WSL_VERSION=$(uname -r)
@@ -101,8 +175,7 @@ git checkout linux-msft-wsl-5.15.90.1  # 替换为实际的版本号
 # 小版本差异（如 5.15.90.x）通常不会影响 Waydroid 功能
 ```
 
-### 步骤 3: 配置内核
-
+#### 步骤 3: 配置内核
 ```bash
 # 复制当前 WSL2 的配置作为基础
 # 从运行的 WSL2 中提取配置（如果存在）
@@ -117,8 +190,7 @@ fi
 make olddefconfig
 ```
 
-### 步骤 4: 启用 Waydroid 所需的内核模块
-
+#### 步骤 4: 启用 Waydroid 所需的内核模块
 ```bash
 # 使用脚本启用必要的配置选项
 ./scripts/config --enable CONFIG_ANDROID
@@ -136,8 +208,7 @@ echo 'CONFIG_ANDROID_BINDER_DEVICES="binder,hwbinder,vndbinder"' >> .config
 grep -E "CONFIG_ANDROID|CONFIG_ASHMEM|CONFIG_BINDER" .config
 ```
 
-### 步骤 5: 编译内核
-
+#### 步骤 5: 编译内核
 ```bash
 # 清理之前的编译（首次编译可跳过）
 # make clean
@@ -151,8 +222,7 @@ make -j$(nproc) 2>&1 | tee build.log
 # arch/x86/boot/bzImage
 ```
 
-### 步骤 6: 安装内核模块
-
+#### 步骤 6: 安装内核模块
 ```bash
 # 安装内核模块到指定目录
 sudo make modules_install
@@ -161,8 +231,7 @@ sudo make modules_install
 # make INSTALL_MOD_PATH=$HOME/wsl2-modules modules_install
 ```
 
-### 步骤 7: 复制内核到 Windows
-
+#### 步骤 7: 复制内核到 Windows
 ```bash
 # 创建 Windows 可访问的目录
 mkdir -p /mnt/c/wsl2-kernel
@@ -176,8 +245,11 @@ cp .config /mnt/c/wsl2-kernel/config-waydroid
 echo "内核已复制到: C:\wsl2-kernel\bzImage-waydroid"
 ```
 
-### 步骤 8: 配置 WSL2 使用新内核
+---
 
+### 任务3: 配置 WSL2 使用新内核
+
+#### 步骤 1: 创建 WSL 配置文件
 在 Windows PowerShell 或 CMD 中执行：
 
 ```powershell
@@ -196,14 +268,133 @@ swap=2GB
 localhostForwarding=true
 ```
 
-### 步骤 9: 重启 WSL2
-
+#### 步骤 2: 重启 WSL2
 ```powershell
 # 在 Windows PowerShell 中执行
 wsl --shutdown
 
+# 等待 8 秒确保完全关闭
+Start-Sleep -Seconds 8
+
 # 重新启动 WSL2
 wsl
+```
+
+#### 步骤 3: 验证新内核
+```bash
+# 在 WSL2 中执行
+uname -r
+# 应该显示自定义编译的版本
+
+cat /proc/version
+# 验证内核编译时间
+```
+
+---
+
+### 任务4: 安装 Waydroid 容器环境
+
+#### 步骤 1: 安装 Waydroid
+```bash
+# 更新软件包列表
+sudo apt update
+
+# 安装 Waydroid
+sudo apt install -y waydroid
+```
+
+#### 步骤 2: 初始化 Waydroid
+```bash
+# 选项 1: 标准镜像（推荐初次尝试，无 Google 服务）
+sudo waydroid init
+
+# 选项 2: 带 Google Play 服务（镜像较大，约 1GB+）
+# sudo waydroid init -g
+
+# 选项 3: 强制重新初始化（覆盖现有数据）
+# sudo waydroid init -f
+```
+
+#### 步骤 3: 启动 Waydroid 服务
+```bash
+# 启动容器服务
+sudo systemctl start waydroid-container
+
+# 设置开机自启
+sudo systemctl enable waydroid-container
+
+# 检查状态
+waydroid status
+```
+
+---
+
+### 任务5: 安装指定的 Android APK 应用
+
+#### 步骤 1: 准备 APK 文件
+将 APK 文件复制到 WSL2 可访问的位置：
+```bash
+# 例如，从 Windows 复制到 WSL2
+mkdir -p ~/apk-apps
+cp /mnt/c/Users/YourUsername/Downloads/your-app.apk ~/apk-apps/
+```
+
+#### 步骤 2: 安装 APK
+```bash
+# 确保 Waydroid 容器正在运行
+waydroid status
+
+# 安装 APK
+waydroid app install ~/apk-apps/your-app.apk
+
+# 或者使用 adb（如果已安装）
+# adb install ~/apk-apps/your-app.apk
+```
+
+#### 步骤 3: 验证安装
+```bash
+# 列出已安装的应用
+waydroid app list
+
+# 查找特定应用
+waydroid app list | grep -i "应用名称"
+```
+
+---
+
+### 任务6: 启动并验证应用运行
+
+#### 步骤 1: 启动 Waydroid 会话
+```bash
+# 启动 Waydroid 会话（在后台运行）
+waydroid session start &
+
+# 或者启动完整 UI
+waydroid show-full-ui
+```
+
+#### 步骤 2: 启动特定应用
+```bash
+# 通过应用包名启动
+waydroid app launch com.example.app
+
+# 或者先获取包名
+waydroid app list
+waydroid app launch <包名>
+```
+
+#### 步骤 3: 验证应用运行
+```bash
+# 检查 Waydroid 状态
+waydroid status
+
+# 查看日志
+waydroid log
+
+# 检查 Android 系统日志
+sudo waydroid shell
+# 在 Android shell 中:
+# logcat | grep -i "应用名称"
 ```
 
 ---
@@ -608,10 +799,18 @@ show_completion_info() {
     echo "  WSL2 Waydroid 内核编译成功！"
     echo "========================================"
     echo ""
+    echo "部署任务进度:"
+    echo "  ✓ 任务1: 检查 WSL2 环境状态"
+    echo "  ✓ 任务2: 编译并安装支持 Waydroid 的自定义内核"
+    echo "  ⏳ 任务3: 配置 WSL2 使用新内核 (需手动完成)"
+    echo "  ⏳ 任务4: 安装 Waydroid 容器环境"
+    echo "  ⏳ 任务5: 安装 Android APK 应用"
+    echo "  ⏳ 任务6: 启动并验证应用运行"
+    echo ""
     echo "下一步操作:"
     echo ""
     echo "1. 在 Windows PowerShell 中执行:"
-    echo "   notepad \$env:USERPROFILE\\.wslconfig"
+    echo "   notepad \$env:USERPROFILE\.wslconfig"
     echo ""
     echo "2. 添加以下内容:"
     echo "   [wsl2]"
@@ -1057,7 +1256,6 @@ main() {
 # 运行主函数
 main "$@"
 VERIFY_SCRIPT
-
     chmod +x "$verify_script"
     log_info "验证脚本已保存到: ${WIN_KERNEL_PATH}/verify-waydroid.sh"
 }
@@ -2283,6 +2481,64 @@ waydroid show-full-ui
 1. 打开 Windows  Defender 防火墙
 2. 允许 VcXsrv 通过防火墙
 3. 或者临时关闭防火墙测试
+
+---
+
+## 网络代理配置
+
+在中国大陆或其他网络受限地区，可能需要配置代理才能访问 GitHub 和其他外部资源。
+
+### 配置 Git 代理
+
+```bash
+# 设置 HTTP/HTTPS 代理
+git config --global http.proxy http://127.0.0.1:7890
+git config --global https.proxy http://127.0.0.1:7890
+
+# 验证配置
+git config --global http.proxy
+git config --global https.proxy
+
+# 取消代理
+git config --global --unset http.proxy
+git config --global --unset https.proxy
+```
+
+### 配置系统代理
+
+```bash
+# 临时设置（当前会话）
+export http_proxy=http://127.0.0.1:7890
+export https_proxy=http://127.0.0.1:7890
+
+# 永久设置（添加到 ~/.bashrc）
+echo 'export http_proxy=http://127.0.0.1:7890' >> ~/.bashrc
+echo 'export https_proxy=http://127.0.0.1:7890' >> ~/.bashrc
+```
+
+### 使用镜像加速
+
+```bash
+# GitHub 镜像（部分可用）
+git clone https://ghproxy.com/https://github.com/microsoft/WSL2-Linux-Kernel.git
+
+# 或者使用其他镜像源
+# https://github.moeyy.xyz/
+# https://mirror.ghproxy.com/
+```
+
+### APT 代理配置
+
+```bash
+# 创建 apt 代理配置
+sudo tee /etc/apt/apt.conf.d/proxy.conf << EOF
+Acquire::http::Proxy "http://127.0.0.1:7890";
+Acquire::https::Proxy "http://127.0.0.1:7890";
+EOF
+
+# 更新软件包列表
+sudo apt update
+```
 
 ---
 
