@@ -14,9 +14,24 @@
 
 ### 系统要求
 - Windows 10 版本 2004 及以上 (Build 19041+) 或 Windows 11
+  - **注意**: Build 19045 (22H2) 完全支持，满足最低版本要求
 - WSL2 已安装并配置
 - 至少 20GB 可用磁盘空间
 - 稳定的网络连接
+
+### 重要提示
+在开始编译前，建议备份当前 WSL2 配置：
+```bash
+# 备份当前内核配置（如果存在）
+if [ -f /proc/config.gz ]; then
+    zcat /proc/config.gz > ~/wsl2-kernel-backup-$(date +%Y%m%d).config
+    echo "配置已备份到: ~/wsl2-kernel-backup-$(date +%Y%m%d).config"
+fi
+
+# 记录当前内核版本
+uname -r > ~/wsl2-original-kernel-version.txt
+echo "原始内核版本已记录"
+```
 
 ### 在 WSL2 Ubuntu 中安装依赖
 
@@ -40,7 +55,13 @@ sudo apt install -y \
     git \
     wget \
     python3 \
-    python3-pip
+    python3-pip \
+    ccache
+
+# 配置 ccache 加速重复编译（可选但推荐）
+ccache --max-size=5G
+export PATH="/usr/lib/ccache:$PATH"
+echo 'export PATH="/usr/lib/ccache:$PATH"' >> ~/.bashrc
 ```
 
 ---
@@ -72,6 +93,12 @@ git tag | grep "linux-msft-wsl-" | tail -20
 # 选择最接近的版本
 # 注意：先查看可用的标签，然后手动选择匹配版本
 git checkout linux-msft-wsl-5.15.90.1  # 替换为实际的版本号
+
+# 版本差异处理说明：
+# 如果找不到完全匹配的版本（如 5.15.90.1 不存在但有 5.15.90.2）：
+# 1. 使用最接近的更高版本（推荐）
+# 2. 或继续使用当前最新版本
+# 小版本差异（如 5.15.90.x）通常不会影响 Waydroid 功能
 ```
 
 ### 步骤 3: 配置内核
@@ -304,7 +331,6 @@ configure_kernel() {
         "CONFIG_ANDROID_BINDER_IPC"
         "CONFIG_ANDROID_BINDERFS"
         "CONFIG_ASHMEM"
-        "CONFIG_BINDERFS"
         "CONFIG_MEMCG"
         "CONFIG_CGROUP_DEVICE"
     )
@@ -469,14 +495,26 @@ lsmod | grep -E "binder|ashmem"
 
 ### 3. 安装和测试 Waydroid
 
+#### Waydroid 初始化选项说明
+
+| 初始化命令 | 说明 | 适用场景 |
+|-----------|------|---------|
+| `sudo waydroid init` | 标准 LineageOS 镜像，无 Google 服务 | 不需要 Google 服务，追求纯净体验 |
+| `sudo waydroid init -g` | 包含 Google Play 服务和应用商店 | 需要 Google 账号登录和 Play 商店 |
+| `sudo waydroid init -f` | 强制重新初始化（覆盖现有数据） | 需要重置 Waydroid 环境 |
+
+**注意**: 带 Google Play 的镜像较大（约 1GB+），初始化时间更长。
+
 ```bash
 # 安装 Waydroid
 sudo apt install -y waydroid
 
-# 初始化 Waydroid（下载 LineageOS 镜像）
-# 如果需要包含 Google Play 服务，添加 -g 参数
+# 初始化 Waydroid（选择以下一种）
+# 选项 1: 标准镜像（推荐初次尝试）
 sudo waydroid init
-# 或带 Google Play: sudo waydroid init -g
+
+# 选项 2: 带 Google Play 服务
+# sudo waydroid init -g
 
 # 启动 Waydroid 服务
 sudo systemctl start waydroid-container
@@ -757,20 +795,60 @@ git config --global https.proxy http://proxy.example.com:8080
 Waydroid 容器运行但无法显示 UI
 
 **解决:**
+
+#### 步骤 1: 在 Windows 上安装 VcXsrv X Server
+
+1. 下载 VcXsrv: https://sourceforge.net/projects/vcxsrv/
+2. 安装并运行 XLaunch，按以下配置：
+   - **Display settings**: Multiple windows
+   - **Display number**: 0
+   - **Client startup**: Start no client
+   - **Extra settings**: 
+     - ☑ Clipboard
+     - ☑ Primary Selection
+     - ☑ Native opengl
+     - ☑ Disable access control (重要！允许 WSL2 连接)
+
+3. 点击完成，确保 VcXsrv 在系统托盘运行
+
+#### 步骤 2: 在 WSL2 中配置显示
+
 ```bash
 # 1. 确保安装了必要的图形支持
 sudo apt install -y weston
 
-# 2. 设置 DISPLAY 环境变量
-export DISPLAY=:0
+# 2. 设置 DISPLAY 环境变量（自动检测 Windows IP）
+export DISPLAY=$(cat /etc/resolv.conf | grep nameserver | awk '{print $2}'):0
 
-# 3. 在 Windows 上安装 VcXsrv 或类似 X Server
-# 下载地址: https://sourceforge.net/projects/vcxsrv/
+# 3. 或者手动设置（如果上述方法无效）
+# export DISPLAY=172.17.224.1:0  # 替换为你的 Windows IP
 
-# 4. 使用以下命令启动 Waydroid
+# 4. 添加到 ~/.bashrc 使其永久生效
+echo 'export DISPLAY=$(cat /etc/resolv.conf | grep nameserver | awk '"'"'{print $2}'"'"'):0' >> ~/.bashrc
+
+# 5. 测试 X 连接
+sudo apt install -y x11-apps
+xclock  # 应该显示一个时钟窗口
+```
+
+#### 步骤 3: 启动 Waydroid
+
+```bash
+# 1. 确保 DISPLAY 已设置
+echo $DISPLAY  # 应该显示类似 172.17.224.1:0
+
+# 2. 启动 Waydroid 会话
 waydroid session start
+
+# 3. 在另一个终端启动完整 UI
 waydroid show-full-ui
 ```
+
+#### 防火墙设置
+如果仍然无法显示，检查 Windows 防火墙：
+1. 打开 Windows  Defender 防火墙
+2. 允许 VcXsrv 通过防火墙
+3. 或者临时关闭防火墙测试
 
 ---
 
@@ -787,7 +865,41 @@ waydroid show-full-ui
 
 | 日期 | 版本 | 说明 |
 |------|------|------|
-| 2024-XX-XX | 1.0 | 初始版本 |
+| 2025-04-21 | 1.1 | 优化版本：添加 Windows Build 19045 兼容性说明、编译前备份建议、ccache 性能优化、内核版本差异处理、Waydroid 初始化详细选项、VcXsrv 详细配置步骤 |
+| 2024-XX-XX | 1.0 | 初始版本：完整的 WSL2 Waydroid 内核编译指南 |
+
+### 版本 1.1 更新详情
+
+#### 新增内容
+1. **系统要求细化**
+   - 明确说明 Build 19045 (22H2) 兼容性
+
+2. **编译前备份**
+   - 添加内核配置备份命令
+   - 添加原始内核版本记录建议
+
+3. **性能优化**
+   - 添加 ccache 安装和配置
+   - 加速重复编译过程
+
+4. **版本处理**
+   - 补充内核版本差异处理说明
+   - 说明小版本差异不影响功能
+
+5. **Waydroid 初始化**
+   - 添加初始化选项对比表
+   - 详细说明标准镜像 vs Google Play 镜像
+   - 添加强制重新初始化选项
+
+6. **图形显示配置**
+   - 重写 VcXsrv 配置步骤
+   - 添加 XLaunch 详细配置参数
+   - 添加 DISPLAY 自动检测方法
+   - 添加防火墙设置说明
+
+#### 改进内容
+- 优化文档结构，增加可读性
+- 补充更多实际使用场景
 
 ---
 
