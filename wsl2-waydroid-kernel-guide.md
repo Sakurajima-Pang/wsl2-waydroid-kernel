@@ -922,12 +922,14 @@ check_kernel_config() {
 
     log_info "使用配置源: $config_source"
 
-    # 定义需要检查的配置
+    # 定义需要检查的配置（与提示词和指南中要求的6个模块一致）
     declare -a required_configs=(
         "CONFIG_ANDROID"
         "CONFIG_ANDROID_BINDER_IPC"
         "CONFIG_ANDROID_BINDERFS"
         "CONFIG_ASHMEM"
+        "CONFIG_MEMCG"
+        "CONFIG_CGROUP_DEVICE"
     )
 
     for cfg in "${required_configs[@]}"; do
@@ -1470,7 +1472,7 @@ restore_from_backup() {
         local size=$(du -sh "$backup" 2>/dev/null | cut -f1)
         local date=$(stat -c %y "$backup" 2>/dev/null | cut -d' ' -f1)
         echo "  $i) $name (大小: $size, 日期: $date)"
-        ((i++))
+        i=$((i+1))
     done
     
     echo ""
