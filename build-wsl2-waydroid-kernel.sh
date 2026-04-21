@@ -422,91 +422,12 @@ show_completion_info() {
     echo "========================================"
     echo ""
     
-    # 创建验证脚本
+    # 复制完整的验证脚本
     local verify_script="${WIN_KERNEL_PATH}/verify-waydroid.sh"
-    cat > "$verify_script" << 'VERIFY_SCRIPT'
-#!/bin/bash
-
-set -e
-
-# 颜色定义
-GREEN='\033[0;32m'
-RED='\033[0;31m'
-YELLOW='\033[1;33m'
-NC='\033[0m'
-
-# 计数器 (初始化确保 set -e 不会导致退出)
-PASS_COUNT=0
-FAIL_COUNT=0
-WARN_COUNT=0
-
-# 使用算术扩展进行递增，避免 set -e 在结果为0时退出
-increment_pass() { PASS_COUNT=$((PASS_COUNT + 1)); }
-increment_fail() { FAIL_COUNT=$((FAIL_COUNT + 1)); }
-increment_warn() { WARN_COUNT=$((WARN_COUNT + 1)); }
-
-echo "=== WSL2 Waydroid 验证脚本 ==="
-echo ""
-
-# 检查内核
-echo "1. 检查内核版本:"
-echo "   $(uname -r)"
-echo ""
-
-# 检查 binder 设备
-echo "2. 检查 Binder 设备:"
-if ls /dev/binder* 2>/dev/null | head -3; then
-    echo -e "   ${GREEN}✓ Binder 设备存在${NC}"
-else
-    echo -e "   ${RED}✗ Binder 设备不存在${NC}"
-fi
-echo ""
-
-# 检查 ashmem
-echo "3. 检查 Ashmem:"
-if [ -e /dev/ashmem ]; then
-    echo -e "   ${GREEN}✓ Ashmem 设备存在${NC}"
-else
-    echo -e "   ${RED}✗ Ashmem 设备不存在${NC}"
-fi
-echo ""
-
-# 检查 binderfs
-echo "4. 检查 BinderFS:"
-if mount | grep -q binderfs; then
-    echo -e "   ${GREEN}✓ BinderFS 已挂载${NC}"
-else
-    echo -e "   ${YELLOW}⚠ BinderFS 未挂载${NC}"
-fi
-echo ""
-
-# 检查 Waydroid
-echo "5. 检查 Waydroid 安装:"
-if command -v waydroid &>/dev/null; then
-    echo -e "   ${GREEN}✓ Waydroid 已安装${NC}"
-    echo "   版本: $(waydroid --version 2>/dev/null || echo 'Unknown')"
-else
-    echo -e "   ${RED}✗ Waydroid 未安装${NC}"
-fi
-echo ""
-
-# 检查内核配置
-echo "6. 检查内核配置:"
-if [ -f /proc/config.gz ]; then
-    for cfg in CONFIG_ANDROID CONFIG_ANDROID_BINDER_IPC CONFIG_ANDROID_BINDERFS CONFIG_ASHMEM CONFIG_MEMCG CONFIG_CGROUP_DEVICE; do
-        if zcat /proc/config.gz 2>/dev/null | grep -q "^${cfg}=y"; then
-            echo -e "   ${GREEN}✓${NC} ${cfg}=y"
-        else
-            echo -e "   ${RED}✗${NC} ${cfg} 未启用"
-        fi
-    done
-fi
-echo ""
-
-echo "=== 验证完成 ==="
-VERIFY_SCRIPT
-    
-    chmod +x "$verify_script"
+    cp "$(dirname "$0")/verify-waydroid.sh" "$verify_script" 2>/dev/null || {
+        log_warn "无法复制 verify-waydroid.sh，请手动确保该文件存在"
+    }
+    chmod +x "$verify_script" 2>/dev/null || true
     log_info "验证脚本已保存到: ${WIN_KERNEL_PATH}/verify-waydroid.sh"
 }
 

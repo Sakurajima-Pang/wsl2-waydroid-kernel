@@ -725,7 +725,7 @@ check_kernel_config() {
 
     log_info "使用配置源: $config_source"
 
-    # 定义需要检查的配置（与提示词和指南中要求的6个模块一致）
+    # 定义需要检查的配置（与提示词和指南中要求的模块一致）
     declare -a required_configs=(
         "CONFIG_ANDROID"
         "CONFIG_ANDROID_BINDER_IPC"
@@ -751,6 +751,20 @@ check_kernel_config() {
             log_fail "$cfg 未启用"
         fi
     done
+
+    # 检查 CONFIG_ANDROID_BINDER_DEVICES 字符串配置
+    local binder_devices_config
+    if [ "$config_source" = "/proc/config.gz" ]; then
+        binder_devices_config=$(zcat /proc/config.gz 2>/dev/null | grep "^CONFIG_ANDROID_BINDER_DEVICES=" || echo "")
+    else
+        binder_devices_config=$(grep "^CONFIG_ANDROID_BINDER_DEVICES=" "$config_source" || echo "")
+    fi
+
+    if echo "$binder_devices_config" | grep -q "binder.*hwbinder.*vndbinder"; then
+        log_pass "$binder_devices_config"
+    else
+        log_fail "CONFIG_ANDROID_BINDER_DEVICES 未正确设置"
+    fi
 }
 
 # 检查 binder 设备
@@ -1261,7 +1275,7 @@ check_kernel_config() {
 
     log_info "使用配置源: $config_source"
 
-    # 定义需要检查的配置（与提示词和指南中要求的6个模块一致）
+    # 定义需要检查的配置（与提示词和指南中要求的模块一致）
     declare -a required_configs=(
         "CONFIG_ANDROID"
         "CONFIG_ANDROID_BINDER_IPC"
@@ -1287,6 +1301,20 @@ check_kernel_config() {
             log_fail "$cfg 未启用"
         fi
     done
+
+    # 检查 CONFIG_ANDROID_BINDER_DEVICES 字符串配置
+    local binder_devices_config
+    if [ "$config_source" = "/proc/config.gz" ]; then
+        binder_devices_config=$(zcat /proc/config.gz 2>/dev/null | grep "^CONFIG_ANDROID_BINDER_DEVICES=" || echo "")
+    else
+        binder_devices_config=$(grep "^CONFIG_ANDROID_BINDER_DEVICES=" "$config_source" || echo "")
+    fi
+
+    if echo "$binder_devices_config" | grep -q "binder.*hwbinder.*vndbinder"; then
+        log_pass "$binder_devices_config"
+    else
+        log_fail "CONFIG_ANDROID_BINDER_DEVICES 未正确设置"
+    fi
 }
 
 # 检查 binder 设备
