@@ -251,7 +251,7 @@ CONFIG_CGROUP_DEVICE=y
 脚本会在 Windows 用户目录创建 `.wslconfig`:
 ```ini
 [wsl2]
-kernel=C:\\Users\\<用户名>\\wsl2-waydroid-kernel\\bzImage
+kernel=C:\Users\<用户名>\wsl2-waydroid-kernel\bzImage-waydroid
 ```
 
 **注意**: 此步骤需要管理员权限
