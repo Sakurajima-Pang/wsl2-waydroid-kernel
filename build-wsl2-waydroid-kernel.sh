@@ -352,7 +352,7 @@ generate_wsl_config() {
 
 [wsl2]
 # 自定义内核路径
-kernel=${win_path}\\\\bzImage-waydroid
+kernel=${win_path}\\\bzImage-waydroid
 
 # 内存限制 (根据你的系统调整)
 memory=${mem_limit}GB

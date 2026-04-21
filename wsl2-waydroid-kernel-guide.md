@@ -567,7 +567,7 @@ generate_wsl_config() {
 
 [wsl2]
 # 自定义内核路径
-kernel=${win_path}\\\\bzImage-waydroid
+kernel=${win_path}\\\bzImage-waydroid
 
 # 内存限制 (根据你的系统调整)
 memory=${mem_limit}GB
@@ -692,7 +692,7 @@ echo ""
 # 检查内核配置
 echo "6. 检查内核配置:"
 if [ -f /proc/config.gz ]; then
-    for cfg in CONFIG_ANDROID CONFIG_ANDROID_BINDER_IPC CONFIG_ANDROID_BINDERFS CONFIG_ASHMEM; do
+    for cfg in CONFIG_ANDROID CONFIG_ANDROID_BINDER_IPC CONFIG_ANDROID_BINDERFS CONFIG_ASHMEM CONFIG_MEMCG CONFIG_CGROUP_DEVICE; do
         if zcat /proc/config.gz 2>/dev/null | grep -q "^${cfg}=y"; then
             echo -e "   ${GREEN}✓${NC} ${cfg}=y"
         else
@@ -1513,7 +1513,7 @@ restore_from_backup() {
         log_info "创建 WSL 配置文件..."
         cat > "$wslconfig_path" << EOF
 [wsl2]
-kernel=${win_path}\\bzImage-waydroid
+kernel=${win_path}\\\bzImage-waydroid
 memory=8GB
 processors=4
 swap=2GB

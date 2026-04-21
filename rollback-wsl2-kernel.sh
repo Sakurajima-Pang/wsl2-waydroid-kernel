@@ -265,7 +265,7 @@ restore_from_backup() {
         log_info "创建 WSL 配置文件..."
         cat > "$wslconfig_path" << EOF
 [wsl2]
-kernel=${win_path}\\\\bzImage-waydroid
+kernel=${win_path}\\\bzImage-waydroid
 memory=8GB
 processors=4
 swap=2GB
