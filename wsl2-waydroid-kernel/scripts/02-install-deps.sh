@@ -51,47 +51,19 @@ detect_distro() {
     fi
 }
 
-configure_proxy() {
-    log_info "检查代理配置..."
+check_network() {
+    log_info "检查网络连接..."
     
-    local proxy_set=false
-    
-    if [ -n "$http_proxy" ] || [ -n "$https_proxy" ]; then
-        log_success "检测到系统代理配置"
-        log_info "HTTP_PROXY: $http_proxy"
-        log_info "HTTPS_PROXY: $https_proxy"
-        proxy_set=true
+    local curl_exit_code=0
+    curl -s --max-time 10 https://github.com > /dev/null 2>&1 || curl_exit_code=$?
+    if [ $curl_exit_code -eq 0 ]; then
+        log_success "网络连接正常，可以访问 GitHub"
+    else
+        log_warning "无法直接访问 GitHub"
+        log_info "请确保网络连接正常后再继续"
     fi
     
-    if [ -f "$HOME/.gitconfig" ] && grep -q "proxy" "$HOME/.gitconfig" 2>/dev/null; then
-        log_success "检测到 Git 代理配置"
-        proxy_set=true
-    fi
-    
-    if [ "$proxy_set" = false ]; then
-        log_warning "未检测到代理配置"
-        log_info "如果网络访问 GitHub 较慢，建议配置代理"
-        log_info "例如: export https_proxy=http://127.0.0.1:7890"
-        
-        read -p "是否需要配置代理? (y/N): " -n 1 -r
-        echo
-        if [[ $REPLY =~ ^[Yy]$ ]]; then
-            read -p "请输入代理地址 (例如: http://127.0.0.1:7890): " proxy_url
-            if [ -n "$proxy_url" ]; then
-                export http_proxy="$proxy_url"
-                export https_proxy="$proxy_url"
-                export HTTP_PROXY="$proxy_url"
-                export HTTPS_PROXY="$proxy_url"
-                
-                git config --global http.proxy "$proxy_url"
-                git config --global https.proxy "$proxy_url"
-                
-                log_success "代理已配置: $proxy_url"
-            fi
-        fi
-    fi
-    
-    echo "PROXY_CONFIGURED=$proxy_set" >> "$LOG_FILE"
+    echo "NETWORK_CHECKED=true" >> "$LOG_FILE"
 }
 
 update_package_list() {
@@ -285,8 +257,8 @@ main() {
     }
     
     current_step=$((current_step + 1))
-    show_progress $current_step "配置代理"
-    configure_proxy
+    show_progress $current_step "检查网络"
+    check_network
     echo "" | tee -a "$LOG_FILE"
     
     current_step=$((current_step + 1))

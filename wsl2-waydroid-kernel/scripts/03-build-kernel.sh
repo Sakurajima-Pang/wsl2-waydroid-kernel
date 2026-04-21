@@ -52,61 +52,20 @@ print_footer() {
     echo -e "${BLUE}========================================${NC}"
 }
 
-configure_proxy() {
-    log_info "检查代理配置..."
-    
-    local proxy_set=false
-    
-    # 检查环境变量
-    if [ -n "$http_proxy" ] || [ -n "$https_proxy" ]; then
-        log_success "检测到系统代理配置"
-        log_info "HTTP_PROXY: $http_proxy"
-        log_info "HTTPS_PROXY: $https_proxy"
-        proxy_set=true
-    fi
-    
-    # 检查git配置
-    if [ -f "$HOME/.gitconfig" ] && grep -q "proxy" "$HOME/.gitconfig" 2>/dev/null; then
-        log_success "检测到 Git 代理配置"
-        local git_proxy
-        git_proxy=$(git config --global http.proxy 2>/dev/null || echo "未设置")
-        log_info "Git HTTP Proxy: $git_proxy"
-        proxy_set=true
-    fi
-    
-    # 如果没有配置代理，询问用户
-    if [ "$proxy_set" = false ]; then
-        log_warning "未检测到代理配置"
-        log_info "如果网络访问 GitHub 较慢，建议配置代理"
-        
-        read -p "是否需要配置代理? (y/N): " -n 1 -r
-        echo
-        if [[ $REPLY =~ ^[Yy]$ ]]; then
-            read -p "请输入代理地址 (例如: http://127.0.0.1:7890): " proxy_url
-            if [ -n "$proxy_url" ]; then
-                export http_proxy="$proxy_url"
-                export https_proxy="$proxy_url"
-                export HTTP_PROXY="$proxy_url"
-                export HTTPS_PROXY="$proxy_url"
-                
-                git config --global http.proxy "$proxy_url"
-                git config --global https.proxy "$proxy_url"
-                
-                log_success "代理已配置: $proxy_url"
-                proxy_set=true
-            fi
-        fi
-    fi
+check_network() {
+    log_info "检查网络连接..."
     
     # 测试GitHub连接
     log_info "测试 GitHub 连接..."
-    if curl -s --max-time 10 https://github.com > /dev/null 2>&1; then
-        log_success "GitHub 连接正常"
+    local curl_exit_code=0
+    curl -s --max-time 10 https://github.com > /dev/null 2>&1 || curl_exit_code=$?
+    if [ $curl_exit_code -eq 0 ]; then
+        log_success "网络连接正常，可以访问 GitHub"
     else
-        log_warning "GitHub 连接失败，可能需要配置代理"
+        log_warning "无法直接访问 GitHub，请检查网络连接"
     fi
     
-    echo "PROXY_CONFIGURED=$proxy_set" >> "$LOG_FILE"
+    echo "NETWORK_CHECKED=true" >> "$LOG_FILE"
 }
 
 get_kernel_branch() {
@@ -140,12 +99,6 @@ clone_kernel_source() {
     branch=$(get_kernel_branch)
     log_info "使用分支: $branch"
     
-    # 显示当前代理设置
-    log_info "当前代理设置:"
-    log_info "  http_proxy=${http_proxy:-'(未设置)'}")
-    log_info "  https_proxy=${https_proxy:-'(未设置)'}")
-    log_info "  Git HTTP Proxy=$(git config --global http.proxy 2>/dev/null || echo '(未设置)')"
-    
     if [ -d "$KERNEL_DIR" ]; then
         log_warning "内核目录已存在: $KERNEL_DIR"
         read -p "是否重新克隆? (y/N): " -n 1 -r
@@ -161,8 +114,23 @@ clone_kernel_source() {
                 log_error "git fetch 失败，请检查网络连接和代理设置"
                 return 1
             fi
-            if ! git checkout "$branch" 2>/dev/null || ! git checkout -b "$branch" origin/"$branch" 2>/dev/null; then
-                log_warning "切换分支可能出现问题，继续使用当前分支"
+            # 更健壮的分支切换：先尝试切换到本地分支，如果不存在则创建并跟踪远程分支
+            if git rev-parse --verify "$branch" >/dev/null 2>&1; then
+                # 本地分支存在，直接切换
+                if ! git checkout "$branch" 2>&1 | tee -a "$LOG_FILE"; then
+                    log_warning "切换到本地分支 $branch 失败，继续使用当前分支"
+                else
+                    log_success "已切换到本地分支: $branch"
+                fi
+            elif git rev-parse --verify "origin/$branch" >/dev/null 2>&1; then
+                # 远程分支存在，创建本地分支跟踪它
+                if ! git checkout -b "$branch" "origin/$branch" 2>&1 | tee -a "$LOG_FILE"; then
+                    log_warning "创建并切换到分支 $branch 失败，继续使用当前分支"
+                else
+                    log_success "已创建并切换到分支: $branch (跟踪 origin/$branch)"
+                fi
+            else
+                log_warning "分支 $branch 不存在于本地或远程，继续使用当前分支"
             fi
             return 0
         fi
@@ -200,8 +168,7 @@ clone_kernel_source() {
         log_info ""
         log_info "可能的解决方案:"
         log_info "1. 检查网络连接"
-        log_info "2. 配置代理: export https_proxy=http://127.0.0.1:7890"
-        log_info "3. 手动克隆: git clone $WSL_KERNEL_REPO $KERNEL_DIR"
+        log_info "2. 手动克隆: git clone $WSL_KERNEL_REPO $KERNEL_DIR"
         
         return 1
     fi
@@ -409,18 +376,19 @@ main() {
         log_info "[$step/$total_steps] $name..."
     }
     
-    # 配置代理
-    configure_proxy
+    # 检查网络
+    check_network
     echo "" | tee -a "$LOG_FILE"
     
     read -p "确认开始编译? 这将需要 30-60 分钟 (Y/n): " -n 1 -r
     echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]] && [ -n "$REPLY" ]; then
+    # 默认值为 Y，如果用户输入 n/N 则退出
+    if [[ $REPLY =~ ^[Nn]$ ]]; then
         log_info "用户取消编译"
         exit 0
     fi
     
-    current_step=1
+    ((current_step++))
     show_progress $current_step "克隆内核源码"
     if ! clone_kernel_source; then
         log_error "克隆内核源码失败，编译中止"
@@ -429,12 +397,12 @@ main() {
     fi
     echo "" | tee -a "$LOG_FILE"
     
-    current_step=1
+    ((current_step++))
     show_progress $current_step "配置内核"
     configure_kernel
     echo "" | tee -a "$LOG_FILE"
     
-    current_step=1
+    ((current_step++))
     show_progress $current_step "编译内核 (这可能需要30-60分钟)"
     if ! compile_kernel; then
         log_error "内核编译失败"
@@ -443,12 +411,12 @@ main() {
     fi
     echo "" | tee -a "$LOG_FILE"
     
-    current_step=1
+    ((current_step++))
     show_progress $current_step "编译内核模块"
     compile_modules
     echo "" | tee -a "$LOG_FILE"
     
-    current_step=1
+    ((current_step++))
     show_progress $current_step "复制内核镜像"
     if ! copy_kernel_image; then
         log_error "复制内核镜像失败"
@@ -457,7 +425,7 @@ main() {
     fi
     echo "" | tee -a "$LOG_FILE"
     
-    current_step=1
+    ((current_step++))
     show_progress $current_step "保存内核信息"
     save_kernel_info
     

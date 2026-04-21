@@ -181,9 +181,6 @@ waydroid show-full-ui
 - dwarves
 - 其他编译工具
 
-**代理配置**:
-脚本会自动检测并配置代理（如需要）
-
 **示例输出**:
 ```
 [INFO] 更新软件包列表...
@@ -220,7 +217,7 @@ CONFIG_CGROUP_DEVICE=y
 ```
 
 **输出**:
-- 编译后的内核镜像: `arch/x86/boot/bzImage`
+- 编译后的内核镜像: `build/bzImage-waydroid`
 - 内核模块目录
 
 **示例输出**:
@@ -229,9 +226,9 @@ CONFIG_CGROUP_DEVICE=y
 [INFO] 复制内核配置...
 [INFO] 应用 Waydroid 配置补丁...
 [INFO] 开始编译内核（使用 8 线程）...
-[INFO] 编译进度: [##########] 100%
+[INFO] 编译进度: [##########] 100%```
 [SUCCESS] 内核编译完成
-[SUCCESS] 内核文件: /home/user/wsl2-waydroid-kernel/build/bzImage
+[SUCCESS] 内核文件: /home/user/wsl2-waydroid-kernel/build/bzImage-waydroid
 ```
 
 ---
@@ -251,20 +248,21 @@ CONFIG_CGROUP_DEVICE=y
 脚本会在 Windows 用户目录创建 `.wslconfig`:
 ```ini
 [wsl2]
-kernel=C:\Users\<用户名>\wsl2-waydroid-kernel\bzImage-waydroid
+kernel=C:\\Users\\<用户名>\\wsl2-waydroid-kernel\\bzImage-waydroid
 ```
 
 **注意**: 此步骤需要管理员权限
 
 **示例输出**:
 ```
-[INFO] 备份当前内核...
-[INFO] 安装新内核...
+[INFO] 备份当前配置...
+[INFO] 复制内核到 Windows...
 [INFO] 配置 .wslconfig...
 [INFO] 重启 WSL...
-[INFO] 验证新内核...
-[SUCCESS] 内核安装成功
-[SUCCESS] 新内核版本: 5.15.133.1-microsoft-standard-WSL2-waydroid
+[SUCCESS] 内核安装完成
+[INFO] WSL 重启后，请按顺序执行:
+[INFO]   1. bash 05-install-waydroid.sh  (安装 Waydroid)
+[INFO]   2. bash 06-verify.sh           (验证安装)
 ```
 
 ---

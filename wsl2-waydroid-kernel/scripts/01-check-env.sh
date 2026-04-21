@@ -164,7 +164,7 @@ check_network() {
         github_accessible=true
     else
         log_warning "GitHub 连接: 超时或无法访问"
-        log_info "建议配置代理以加速下载"
+        log_info "请检查网络连接或代理设置"
     fi
     
     echo "GITHUB_ACCESSIBLE=$github_accessible" >> "$LOG_FILE"
