@@ -345,6 +345,8 @@ generate_wsl_config() {
     # WSL2 .wslconfig 文件需要使用双反斜杠作为路径分隔符
     # 支持任意盘符 (c, d, e等)
     local win_path=$(echo "${WIN_KERNEL_PATH}" | sed 's|/mnt/\([a-zA-Z]\)/|\1:\\\\|' | sed 's|/|\\\\|g')
+    # 确保内核路径使用双反斜杠
+    win_path="${win_path}\\\\bzImage-waydroid"
     
     cat > "$config_file" << EOF
 # WSL2 配置文件
@@ -352,7 +354,7 @@ generate_wsl_config() {
 
 [wsl2]
 # 自定义内核路径
-kernel=${win_path}\\\bzImage-waydroid
+kernel=${win_path}
 
 # 内存限制 (根据你的系统调整)
 memory=${mem_limit}GB
@@ -424,10 +426,23 @@ show_completion_info() {
     cat > "$verify_script" << 'VERIFY_SCRIPT'
 #!/bin/bash
 
+set -e
+
+# 颜色定义
 GREEN='\033[0;32m'
 RED='\033[0;31m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
+
+# 计数器 (初始化确保 set -e 不会导致退出)
+PASS_COUNT=0
+FAIL_COUNT=0
+WARN_COUNT=0
+
+# 使用算术扩展进行递增，避免 set -e 在结果为0时退出
+increment_pass() { PASS_COUNT=$((PASS_COUNT + 1)); }
+increment_fail() { FAIL_COUNT=$((FAIL_COUNT + 1)); }
+increment_warn() { WARN_COUNT=$((WARN_COUNT + 1)); }
 
 echo "=== WSL2 Waydroid 验证脚本 ==="
 echo ""
