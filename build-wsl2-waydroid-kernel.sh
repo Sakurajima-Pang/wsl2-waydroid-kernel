@@ -13,6 +13,10 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
+# 配置路径（可自定义）
+WIN_KERNEL_PATH="${WIN_KERNEL_PATH:-/mnt/c/wsl2-kernel}"
+KERNEL_BUILD_DIR="${KERNEL_BUILD_DIR:-$HOME/wsl2-kernel-build}"
+
 # 日志函数
 log_info() {
     echo -e "${GREEN}[INFO]${NC} $1"
@@ -46,7 +50,7 @@ check_wsl2() {
 check_disk_space() {
     log_step "检查磁盘空间..."
     local available=$(df /home | tail -1 | awk '{print $4}')
-    local required=$((20 * 1024 * 1024)) # 20GB in KB
+    local required=20971520 # 20GB in KB (预计算避免溢出)
     local available_gb=$((available / 1024 / 1024))
     
     log_info "可用磁盘空间: ${available_gb}GB"
@@ -110,8 +114,8 @@ install_dependencies() {
 download_kernel() {
     log_step "下载 WSL2 内核源码..."
     
-    mkdir -p ~/wsl2-kernel-build
-    cd ~/wsl2-kernel-build
+    mkdir -p "${KERNEL_BUILD_DIR}"
+    cd "${KERNEL_BUILD_DIR}"
     
     if [ -d "WSL2-Linux-Kernel" ]; then
         log_warn "内核源码目录已存在"
@@ -231,11 +235,13 @@ compile_kernel() {
     
     local start_time=$(date +%s)
     local cpu_count=$(nproc)
+    local build_log=$(mktemp /tmp/kernel-build.XXXXXX.log)
     
     log_info "使用 ${cpu_count} 个 CPU 核心进行编译"
+    log_info "编译日志: ${build_log}"
     
     # 编译
-    if make -j"${cpu_count}" 2>&1 | tee build.log | while read line; do
+    if make -j"${cpu_count}" 2>&1 | tee "${build_log}" | while read line; do
         echo "$line" | grep -E "^(  CC|  LD|  AR|  CHK|Kernel:|Building)" | head -5
     done; then
         local end_time=$(date +%s)
@@ -245,9 +251,12 @@ compile_kernel() {
         
         log_info "内核编译成功！"
         log_info "编译耗时: ${minutes} 分 ${seconds} 秒"
+        # 保留成功的编译日志
+        cp "${build_log}" "${WIN_KERNEL_PATH}/build.log" 2>/dev/null || true
+        rm -f "${build_log}"
     else
         log_error "内核编译失败"
-        log_error "请查看 build.log 了解详细错误信息"
+        log_error "请查看 ${build_log} 了解详细错误信息"
         exit 1
     fi
     
@@ -266,41 +275,38 @@ install_kernel() {
     log_step "安装内核..."
     
     # 创建 Windows 目录
-    local win_path="/mnt/c/wsl2-kernel"
-    
-    if [ ! -d "$win_path" ]; then
-        log_info "创建目录: C:\\wsl2-kernel"
-        mkdir -p "$win_path"
+    if [ ! -d "${WIN_KERNEL_PATH}" ]; then
+        log_info "创建目录: ${WIN_KERNEL_PATH}"
+        mkdir -p "${WIN_KERNEL_PATH}"
     fi
     
     # 备份旧内核
-    if [ -f "${win_path}/bzImage-waydroid" ]; then
+    if [ -f "${WIN_KERNEL_PATH}/bzImage-waydroid" ]; then
         log_info "备份旧内核..."
-        cp "${win_path}/bzImage-waydroid" "${win_path}/bzImage-waydroid.backup.$(date +%Y%m%d%H%M%S)"
+        cp "${WIN_KERNEL_PATH}/bzImage-waydroid" "${WIN_KERNEL_PATH}/bzImage-waydroid.backup.$(date +%Y%m%d%H%M%S)"
     fi
     
     # 复制内核
     log_info "复制内核到 Windows..."
-    cp arch/x86/boot/bzImage "${win_path}/bzImage-waydroid"
-    cp .config "${win_path}/config-waydroid"
+    cp arch/x86/boot/bzImage "${WIN_KERNEL_PATH}/bzImage-waydroid"
+    cp .config "${WIN_KERNEL_PATH}/config-waydroid"
     
     # 记录编译信息
-    cat > "${win_path}/build-info.txt" << EOF
+    cat > "${WIN_KERNEL_PATH}/build-info.txt" << EOF
 编译时间: $(date)
 内核版本: $(make kernelrelease 2>/dev/null || echo 'Unknown')
 Git 提交: $(git rev-parse --short HEAD 2>/dev/null || echo 'Unknown')
 编译主机: $(uname -a)
 EOF
     
-    log_info "内核已安装到: C:\\wsl2-kernel\\bzImage-waydroid"
+    log_info "内核已安装到: ${WIN_KERNEL_PATH}/bzImage-waydroid"
 }
 
 # 生成 WSL 配置
 generate_wsl_config() {
     log_step "生成 WSL 配置..."
     
-    local win_path="/mnt/c/wsl2-kernel"
-    local config_file="${win_path}/.wslconfig-template"
+    local config_file="${WIN_KERNEL_PATH}/.wslconfig-template"
     
     # 获取系统内存信息
     local total_mem=$(free -g | awk '/^Mem:/{print $2}')
@@ -316,13 +322,16 @@ generate_wsl_config() {
         cpu_limit=2
     fi
     
+    # 获取Windows路径格式
+    local win_path_escaped=$(echo "${WIN_KERNEL_PATH}" | sed 's|/mnt/c/|C:\\\\|' | sed 's|/|\\\\|g')
+    
     cat > "$config_file" << EOF
 # WSL2 配置文件
 # 将此内容复制到 %USERPROFILE%\\.wslconfig (Windows 用户目录下)
 
 [wsl2]
 # 自定义内核路径
-kernel=C:\\\\wsl2-kernel\\\\bzImage-waydroid
+kernel=${win_path_escaped}\\\\bzImage-waydroid
 
 # 内存限制 (根据你的系统调整)
 memory=${mem_limit}GB
@@ -341,7 +350,7 @@ localhostForwarding=true
 EOF
     
     log_info "WSL 配置模板已保存"
-    log_info "位置: C:\\wsl2-kernel\\.wslconfig-template"
+    log_info "位置: ${WIN_KERNEL_PATH}/.wslconfig-template"
     
     # 显示配置内容
     echo ""
@@ -390,7 +399,7 @@ show_completion_info() {
     echo ""
     
     # 创建验证脚本
-    local verify_script="/mnt/c/wsl2-kernel/verify-waydroid.sh"
+    local verify_script="${WIN_KERNEL_PATH}/verify-waydroid.sh"
     cat > "$verify_script" << 'VERIFY_SCRIPT'
 #!/bin/bash
 
@@ -461,7 +470,7 @@ echo "=== 验证完成 ==="
 VERIFY_SCRIPT
     
     chmod +x "$verify_script"
-    log_info "验证脚本已保存到: C:\\wsl2-kernel\\verify-waydroid.sh"
+    log_info "验证脚本已保存到: ${WIN_KERNEL_PATH}/verify-waydroid.sh"
 }
 
 # 主函数

@@ -12,6 +12,9 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
+# 配置路径（可自定义）
+WIN_KERNEL_PATH="${WIN_KERNEL_PATH:-/mnt/c/wsl2-kernel}"
+
 # 计数器
 PASS_COUNT=0
 FAIL_COUNT=0

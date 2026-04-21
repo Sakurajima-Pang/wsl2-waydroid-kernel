@@ -12,6 +12,9 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
+# 配置路径（可自定义）
+WIN_KERNEL_PATH="${WIN_KERNEL_PATH:-/mnt/c/wsl2-kernel}"
+
 # 日志函数
 log_info() {
     echo -e "${GREEN}[INFO]${NC} $1"
@@ -58,7 +61,7 @@ check_wsl2() {
 
 # 获取 Windows 用户目录
 get_windows_userprofile() {
-    local win_userprofile=$(cmd.exe /c "echo %USERPROFILE%" 2>/dev/null | tr -d '\r')
+    local win_userprofile="$(cmd.exe /c "echo %USERPROFILE%" 2>/dev/null | tr -d '\r')"
     echo "$win_userprofile"
 }
 
@@ -134,7 +137,7 @@ full_rollback() {
     
     local win_userprofile=$(get_windows_userprofile)
     local wslconfig_path="${win_userprofile}\\.wslconfig"
-    local kernel_dir="/mnt/c/wsl2-kernel"
+    local kernel_dir="${WIN_KERNEL_PATH}"
     
     log_warn "此操作将:"
     log_warn "  - 删除自定义内核文件"
@@ -180,8 +183,8 @@ full_rollback() {
 restore_from_backup() {
     log_step "从备份恢复内核"
     
-    local kernel_dir="/mnt/c/wsl2-kernel"
-    local backup_dir="/mnt/c/wsl2-kernel-backup"
+    local kernel_dir="${WIN_KERNEL_PATH}"
+    local backup_dir="${WIN_KERNEL_PATH}-backup"
     
     # 查找备份
     echo ""
@@ -190,7 +193,7 @@ restore_from_backup() {
     local backups=()
     
     # 查找带时间戳的备份
-    for dir in /mnt/c/wsl2-kernel-backup-*; do
+    for dir in "${WIN_KERNEL_PATH}"-backup-*; do
         if [ -d "$dir" ]; then
             backups+=("$dir")
         fi
@@ -251,12 +254,13 @@ restore_from_backup() {
     # 确保 WSL 配置正确
     local win_userprofile=$(get_windows_userprofile)
     local wslconfig_path="${win_userprofile}\\.wslconfig"
+    local win_path_escaped=$(echo "${WIN_KERNEL_PATH}" | sed 's|/mnt/c/|C:\\\\|' | sed 's|/|\\\\|g')
     
     if [ ! -f "/mnt/c${wslconfig_path#C:}" ] 2>/dev/null; then
         log_info "创建 WSL 配置文件..."
         cat > "/mnt/c${wslconfig_path#C:}" << EOF
 [wsl2]
-kernel=C:\\\\wsl2-kernel\\\\bzImage-waydroid
+kernel=${win_path_escaped}\\\\bzImage-waydroid
 memory=8GB
 processors=4
 swap=2GB
@@ -308,10 +312,10 @@ show_kernel_info() {
     
     echo ""
     echo "自定义内核文件:"
-    if [ -f "/mnt/c/wsl2-kernel/bzImage-waydroid" ]; then
-        local kernel_size=$(du -h /mnt/c/wsl2-kernel/bzImage-waydroid | cut -f1)
-        local kernel_date=$(stat -c %y /mnt/c/wsl2-kernel/bzImage-waydroid | cut -d' ' -f1)
-        echo "  路径: C:\\wsl2-kernel\\bzImage-waydroid"
+    if [ -f "${WIN_KERNEL_PATH}/bzImage-waydroid" ]; then
+        local kernel_size=$(du -h "${WIN_KERNEL_PATH}/bzImage-waydroid" | cut -f1)
+        local kernel_date=$(stat -c %y "${WIN_KERNEL_PATH}/bzImage-waydroid" | cut -d' ' -f1)
+        echo "  路径: ${WIN_KERNEL_PATH}/bzImage-waydroid"
         echo "  大小: $kernel_size"
         echo "  日期: $kernel_date"
     else
@@ -332,7 +336,7 @@ show_backups() {
     
     # 查找带时间戳的备份
     echo "自定义内核备份:"
-    for dir in /mnt/c/wsl2-kernel-backup-*; do
+    for dir in "${WIN_KERNEL_PATH}"-backup-*; do
         if [ -d "$dir" ]; then
             local name=$(basename "$dir")
             local size=$(du -sh "$dir" 2>/dev/null | cut -f1)
