@@ -37,7 +37,7 @@ log_progress() {
 
 print_header() {
     echo -e "${BLUE}========================================${NC}"
-    echo -e "${BLUE}   安装 Waydroid v1.0.0${NC}"
+    echo -e "${BLUE}   安装 Waydroid v2.0.0${NC}"
     echo -e "${BLUE}========================================${NC}"
     echo "" | tee -a "$LOG_FILE"
 }
@@ -148,7 +148,7 @@ initialize_waydroid() {
     log_info "选择 Android 镜像类型:"
     echo "1) LineageOS (默认，无 Google 服务)"
     echo "2) LineageOS with GAPPS (包含 Google 服务)"
-    read -p "请选择 (1/2): " -n 1 -r
+    read -p "请选择 (1/2): " -n 1 -r < /dev/tty 2>/dev/null || read -p "请选择 (1/2): " -n 1 -r
     echo
     
     local gapps_option=""
@@ -219,7 +219,6 @@ check_binder_devices() {
         log_info "尝试加载 binder 模块..."
         
         sudo modprobe binder_linux devices="binder,hwbinder,vndbinder" 2>&1 | tee -a "$LOG_FILE" || true
-        sudo modprobe ashmem_linux 2>&1 | tee -a "$LOG_FILE" || true
         
         sleep 1
         
@@ -233,18 +232,31 @@ check_binder_devices() {
     fi
 }
 
-setup_waydroid_config() {
-    log_info "配置 Waydroid..."
+setup_binderfs() {
+    log_info "设置 binderfs..."
     
-    local waydroid_cfg="/var/lib/waydroid/waydroid.cfg"
-    
-    if [ -f "$waydroid_cfg" ]; then
-        log_success "Waydroid 配置文件已存在"
-    else
-        log_warning "Waydroid 配置文件不存在"
+    if [ -d /dev/binderfs ]; then
+        log_success "binderfs 已挂载"
+        return 0
     fi
     
-    log_info "Waydroid 配置完成"
+    log_info "创建 binderfs 目录..."
+    sudo mkdir -p /dev/binderfs
+    
+    log_info "挂载 binderfs..."
+    if sudo mount -t binder binder /dev/binderfs 2>&1 | tee -a "$LOG_FILE"; then
+        log_success "binderfs 挂载成功"
+        
+        log_info "创建 binder 设备符号链接..."
+        sudo ln -sf /dev/binderfs/binder /dev/binder 2>/dev/null || true
+        sudo ln -sf /dev/binderfs/hwbinder /dev/hwbinder 2>/dev/null || true
+        sudo ln -sf /dev/binderfs/vndbinder /dev/vndbinder 2>/dev/null || true
+        
+        log_success "binder 设备符号链接创建完成"
+    else
+        log_warning "binderfs 挂载失败，尝试使用 modprobe..."
+        sudo modprobe binder_linux devices="binder,hwbinder,vndbinder" 2>&1 | tee -a "$LOG_FILE" || true
+    fi
 }
 
 show_post_install_info() {
@@ -280,7 +292,7 @@ main() {
     log_info "日志文件: $LOG_FILE"
     echo "" | tee -a "$LOG_FILE"
     
-    read -p "确认开始安装 Waydroid? (Y/n): " -n 1 -r
+    read -p "确认开始安装 Waydroid? (Y/n): " -n 1 -r < /dev/tty 2>/dev/null || read -p "确认开始安装 Waydroid? (Y/n): " -n 1 -r
     echo
     if [[ ! $REPLY =~ ^[Yy]$ ]] && [ -n "$REPLY" ]; then
         log_info "用户取消安装"
@@ -288,6 +300,9 @@ main() {
     fi
     
     check_binder_devices
+    echo "" | tee -a "$LOG_FILE"
+    
+    setup_binderfs
     echo "" | tee -a "$LOG_FILE"
     
     add_waydroid_repository
@@ -304,8 +319,6 @@ main() {
     
     start_waydroid_service
     echo "" | tee -a "$LOG_FILE"
-    
-    setup_waydroid_config
     
     show_post_install_info
     

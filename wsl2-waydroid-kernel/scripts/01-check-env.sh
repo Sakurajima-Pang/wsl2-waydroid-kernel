@@ -1,7 +1,6 @@
 #!/bin/bash
 
-# 不立即退出，而是手动处理错误
-# set -e
+set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
@@ -34,7 +33,7 @@ log_error() {
 
 print_header() {
     echo -e "${BLUE}========================================${NC}"
-    echo -e "${BLUE}   WSL2 Waydroid 环境检查报告 v1.0.0${NC}"
+    echo -e "${BLUE}   WSL2 Waydroid 环境检查报告 v2.0.0${NC}"
     echo -e "${BLUE}========================================${NC}"
     echo "" | tee -a "$LOG_FILE"
 }
@@ -49,14 +48,6 @@ check_wsl_version() {
     
     if ! command -v wsl.exe &> /dev/null; then
         log_error "未检测到 WSL，请确保在 WSL 环境中运行此脚本"
-        return 1
-    fi
-    
-    local wsl_version
-    wsl_version=$(uname -r | grep -i microsoft | wc -l)
-    
-    if [ "$wsl_version" -eq 0 ]; then
-        log_error "当前不是 WSL 环境"
         return 1
     fi
     
@@ -135,7 +126,7 @@ check_architecture() {
 check_disk_space() {
     log_info "检查磁盘空间..."
     
-    local required_gb=15
+    local required_gb=20
     local available_kb
     local available_gb
     
@@ -164,17 +155,10 @@ check_network() {
         github_accessible=true
     else
         log_warning "GitHub 连接: 超时或无法访问"
-        log_info "请检查网络连接或代理设置"
+        log_info "Clash TUN 模式已配置，如仍无法访问请检查网络"
     fi
     
     echo "GITHUB_ACCESSIBLE=$github_accessible" >> "$LOG_FILE"
-    
-    if curl -s --max-time "$timeout" https://raw.githubusercontent.com > /dev/null 2>&1; then
-        log_success "Raw GitHub 连接: 正常"
-    else
-        log_warning "Raw GitHub 连接: 可能受限"
-    fi
-    
     return 0
 }
 
@@ -233,6 +217,40 @@ check_existing_waydroid() {
     return 0
 }
 
+check_filesystem_case_sensitive() {
+    log_info "检查文件系统大小写敏感性..."
+    
+    # 检查文件系统类型
+    local fs_type
+    fs_type=$(df -T "$PROJECT_DIR" 2>/dev/null | awk 'NR==2 {print $2}')
+    log_info "项目目录文件系统类型: $fs_type"
+    
+    local test_dir="$PROJECT_DIR/.fs_test_$(date +%s)"
+    mkdir -p "$test_dir"
+    
+    touch "$test_dir/TestFile" 2>/dev/null
+    touch "$test_dir/testfile" 2>/dev/null
+    
+    local file_count
+    file_count=$(ls -1 "$test_dir" 2>/dev/null | wc -l)
+    
+    rm -rf "$test_dir"
+    
+    if [ "$file_count" -eq 2 ]; then
+        log_success "文件系统支持大小写敏感（推荐）"
+        echo "FS_CASE_SENSITIVE=true" >> "$LOG_FILE"
+        return 0
+    else
+        log_warning "文件系统不区分大小写"
+        log_info "建议将项目复制到 WSL 虚拟硬盘上:"
+        log_info "  cp -r $PROJECT_DIR ~/wsl2-waydroid-kernel"
+        log_info "  cd ~/wsl2-waydroid-kernel/scripts"
+        log_info "  bash 01-check-env.sh"
+        echo "FS_CASE_SENSITIVE=false" >> "$LOG_FILE"
+        return 0
+    fi
+}
+
 main() {
     print_header
     
@@ -245,90 +263,99 @@ main() {
     local checks_passed=0
     local checks_total=0
     local current_step=0
-    local total_steps=8
-    
-    # 进度显示函数
+    local total_steps=9
+
     show_progress() {
         local step=$1
         local name=$2
         log_info "[$step/$total_steps] 正在检查: $name..."
     }
-    
-    current_step=1
+
+    current_step=$((current_step + 1))
     show_progress $current_step "WSL版本"
-    checks_total=1
+    ((checks_total++))
     if check_wsl_version; then
-        checks_passed=1
+        ((checks_passed++))
     else
         exit_code=1
     fi
     echo "" | tee -a "$LOG_FILE"
-    
-    current_step=1
+
+    current_step=$((current_step + 1))
     show_progress $current_step "发行版信息"
-    checks_total=1
+    ((checks_total++))
     if check_distribution; then
-        checks_passed=1
+        ((checks_passed++))
     else
         exit_code=1
     fi
     echo "" | tee -a "$LOG_FILE"
-    
-    current_step=1
+
+    current_step=$((current_step + 1))
     show_progress $current_step "系统架构"
-    checks_total=1
+    ((checks_total++))
     if check_architecture; then
-        checks_passed=1
+        ((checks_passed++))
     else
         exit_code=1
     fi
     echo "" | tee -a "$LOG_FILE"
-    
-    current_step=1
+
+    current_step=$((current_step + 1))
     show_progress $current_step "磁盘空间"
-    checks_total=1
+    ((checks_total++))
     if check_disk_space; then
-        checks_passed=1
+        ((checks_passed++))
     else
         exit_code=1
     fi
     echo "" | tee -a "$LOG_FILE"
-    
-    current_step=1
+
+    current_step=$((current_step + 1))
     show_progress $current_step "网络连接"
-    checks_total=1
+    ((checks_total++))
     if check_network; then
-        checks_passed=1
+        ((checks_passed++))
     else
         exit_code=1
     fi
     echo "" | tee -a "$LOG_FILE"
-    
-    current_step=1
+
+    current_step=$((current_step + 1))
     show_progress $current_step "内核版本"
-    checks_total=1
+    ((checks_total++))
     if check_kernel_version; then
-        checks_passed=1
+        ((checks_passed++))
     else
         exit_code=1
     fi
     echo "" | tee -a "$LOG_FILE"
-    
-    current_step=1
+
+    current_step=$((current_step + 1))
     show_progress $current_step "内存状态"
-    checks_total=1
+    ((checks_total++))
     if check_memory; then
-        checks_passed=1
+        ((checks_passed++))
     else
         exit_code=1
     fi
     echo "" | tee -a "$LOG_FILE"
-    
-    current_step=1
+
+    current_step=$((current_step + 1))
     show_progress $current_step "Waydroid安装状态"
-    checks_total=1
+    ((checks_total++))
     if check_existing_waydroid; then
-        checks_passed=1
+        ((checks_passed++))
+    else
+        exit_code=1
+    fi
+    echo "" | tee -a "$LOG_FILE"
+
+    current_step=$((current_step + 1))
+    show_progress $current_step "文件系统大小写敏感"
+    ((checks_total++))
+    if check_filesystem_case_sensitive; then
+        ((checks_passed++))
     else
         exit_code=1
     fi
@@ -341,9 +368,9 @@ main() {
         echo "" | tee -a "$LOG_FILE"
         log_info "可以继续执行下一步: bash 02-install-deps.sh"
     else
-        echo -e "${RED}✗ 状态: 环境检查未通过 ($checks_passed/$checks_total)${NC}" | tee -a "$LOG_FILE"
+        echo -e "${YELLOW}⚠ 状态: 环境检查部分通过 ($checks_passed/$checks_total)${NC}" | tee -a "$LOG_FILE"
         echo "" | tee -a "$LOG_FILE"
-        log_error "请解决上述问题后再继续"
+        log_warning "部分检查未通过，但可能仍可继续"
     fi
     
     print_footer

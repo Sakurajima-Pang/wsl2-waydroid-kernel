@@ -33,7 +33,7 @@ log_error() {
 
 print_header() {
     echo -e "${BLUE}========================================${NC}"
-    echo -e "${BLUE}   回滚 WSL2 配置 v1.0.0${NC}"
+    echo -e "${BLUE}   回滚 WSL2 配置 v2.0.0${NC}"
     echo -e "${BLUE}========================================${NC}"
     echo "" | tee -a "$LOG_FILE"
 }
@@ -95,7 +95,7 @@ restore_default_kernel() {
     fi
     
     log_warning "需要重启 WSL 才能生效"
-    read -p "是否现在重启 WSL? (Y/n): " -n 1 -r
+    read -p "是否现在重启 WSL? (Y/n): " -n 1 -r < /dev/tty 2>/dev/null || read -p "是否现在重启 WSL? (Y/n): " -n 1 -r
     echo
     if [[ ! $REPLY =~ ^[Nn]$ ]] || [ -z "$REPLY" ]; then
         log_info "关闭 WSL..."
@@ -127,7 +127,7 @@ cleanup_build_artifacts() {
     local logs_size=0
     if [ -d "$LOG_DIR" ]; then
         logs_size=$(du -sb "$LOG_DIR" 2>/dev/null | cut -f1 || echo "0")
-        read -p "是否删除日志文件? (y/N): " -n 1 -r
+        read -p "是否删除日志文件? (y/N): " -n 1 -r < /dev/tty 2>/dev/null || read -p "是否删除日志文件? (y/N): " -n 1 -r
         echo
         if [[ $REPLY =~ ^[Yy]$ ]]; then
             total_freed=$((total_freed + logs_size))
@@ -149,7 +149,7 @@ uninstall_waydroid() {
     log_info "卸载 Waydroid..."
     
     log_warning "这将删除 Waydroid 及其所有数据"
-    read -p "确认卸载 Waydroid? (y/N): " -n 1 -r
+    read -p "确认卸载 Waydroid? (y/N): " -n 1 -r < /dev/tty 2>/dev/null || read -p "确认卸载 Waydroid? (y/N): " -n 1 -r
     echo
     if [[ ! $REPLY =~ ^[Yy]$ ]]; then
         log_info "取消卸载"
@@ -165,7 +165,7 @@ uninstall_waydroid() {
     
     log_info "删除 Waydroid 数据..."
     sudo rm -rf /var/lib/waydroid 2>&1 | tee -a "$LOG_FILE" || true
-    sudo rm -rf /home/*/.local/share/waydroid 2>&1 | tee -a "$LOG_FILE" || true
+    rm -rf "$HOME/.local/share/waydroid" 2>&1 | tee -a "$LOG_FILE" || true
     
     log_info "卸载 Waydroid 包..."
     local distro

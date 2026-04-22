@@ -33,7 +33,7 @@ log_error() {
 
 print_header() {
     echo -e "${BLUE}========================================${NC}"
-    echo -e "${BLUE}   安装编译依赖 v1.0.0${NC}"
+    echo -e "${BLUE}   安装编译依赖 v2.0.0${NC}"
     echo -e "${BLUE}========================================${NC}"
     echo "" | tee -a "$LOG_FILE"
 }
@@ -49,21 +49,6 @@ detect_distro() {
     else
         echo "unknown"
     fi
-}
-
-check_network() {
-    log_info "检查网络连接..."
-    
-    local curl_exit_code=0
-    curl -s --max-time 10 https://github.com > /dev/null 2>&1 || curl_exit_code=$?
-    if [ $curl_exit_code -eq 0 ]; then
-        log_success "网络连接正常，可以访问 GitHub"
-    else
-        log_warning "无法直接访问 GitHub"
-        log_info "请确保网络连接正常后再继续"
-    fi
-    
-    echo "NETWORK_CHECKED=true" >> "$LOG_FILE"
 }
 
 update_package_list() {
@@ -247,19 +232,13 @@ main() {
     echo "" | tee -a "$LOG_FILE"
     
     local current_step=0
-    local total_steps=5
+    local total_steps=4
     
-    # 进度显示函数
     show_progress() {
         local step=$1
         local name=$2
         log_info "[$step/$total_steps] $name..."
     }
-    
-    current_step=$((current_step + 1))
-    show_progress $current_step "检查网络"
-    check_network
-    echo "" | tee -a "$LOG_FILE"
     
     current_step=$((current_step + 1))
     show_progress $current_step "更新软件包列表"

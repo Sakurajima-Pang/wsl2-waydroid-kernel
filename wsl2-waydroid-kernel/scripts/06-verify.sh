@@ -33,7 +33,7 @@ log_error() {
 
 print_header() {
     echo -e "${BLUE}========================================${NC}"
-    echo -e "${BLUE}   Waydroid 安装验证报告 v1.0.0${NC}"
+    echo -e "${BLUE}   Waydroid 安装验证报告 v2.0.0${NC}"
     echo -e "${BLUE}========================================${NC}"
     echo "" | tee -a "$LOG_FILE"
 }
@@ -67,7 +67,6 @@ verify_kernel_modules() {
     local modules=(
         "android"
         "binder"
-        "ashmem"
     )
     
     local all_loaded=true
@@ -119,18 +118,40 @@ verify_binder_devices() {
     fi
 }
 
-verify_ashmem_device() {
-    log_info "检查 ashmem 设备..."
+verify_binderfs() {
+    log_info "检查 binderfs..."
     
-    if [ -e "/dev/ashmem" ]; then
-        local perms
-        perms=$(ls -la /dev/ashmem 2>/dev/null | awk '{print $1, $3, $4}')
-        log_success "ashmem 设备存在: /dev/ashmem ($perms)"
-        echo "ASHMEM_DEVICE_EXIST=true" >> "$LOG_FILE"
+    if [ -d /dev/binderfs ]; then
+        log_success "binderfs 目录存在"
+        
+        local binder_count
+        binder_count=$(ls -1 /dev/binderfs 2>/dev/null | wc -l)
+        if [ "$binder_count" -gt 0 ]; then
+            log_success "binderfs 中有 $binder_count 个设备"
+            ls -la /dev/binderfs | tee -a "$LOG_FILE"
+        else
+            log_warning "binderfs 中没有设备"
+        fi
+        
+        echo "BINDERFS_EXIST=true" >> "$LOG_FILE"
         return 0
     else
-        log_warning "ashmem 设备不存在"
-        echo "ASHMEM_DEVICE_EXIST=false" >> "$LOG_FILE"
+        log_warning "binderfs 目录不存在"
+        echo "BINDERFS_EXIST=false" >> "$LOG_FILE"
+        return 0
+    fi
+}
+
+verify_memfd() {
+    log_info "检查 memfd 支持..."
+    
+    if zcat /proc/config.gz 2>/dev/null | grep -q "CONFIG_MEMFD_CREATE=y"; then
+        log_success "memfd 已启用"
+        echo "MEMFD_ENABLED=true" >> "$LOG_FILE"
+        return 0
+    else
+        log_info "memfd 状态未知（可能需要检查内核配置）"
+        echo "MEMFD_ENABLED=unknown" >> "$LOG_FILE"
         return 0
     fi
 }
@@ -233,24 +254,25 @@ verify_lxc_config() {
 }
 
 print_summary() {
-    local total_checks=10
+    local total_checks=11
     local passed_checks=0
-    
+
     echo "" | tee -a "$LOG_FILE"
     echo -e "${BLUE}----------------------------------------${NC}" | tee -a "$LOG_FILE"
-    
-    verify_kernel_version && passed_checks=1
-    verify_kernel_modules && passed_checks=1
-    verify_binder_devices && passed_checks=1
-    verify_ashmem_device && passed_checks=1
-    verify_waydroid_installed && passed_checks=1
-    verify_waydroid_service && passed_checks=1
-    verify_waydroid_container && passed_checks=1
-    verify_waydroid_images && passed_checks=1
-    verify_lxc_config && passed_checks=1
-    
+
+    verify_kernel_version && ((passed_checks++))
+    verify_kernel_modules && ((passed_checks++))
+    verify_binder_devices && ((passed_checks++))
+    verify_binderfs && ((passed_checks++))
+    verify_memfd && ((passed_checks++))
+    verify_waydroid_installed && ((passed_checks++))
+    verify_waydroid_service && ((passed_checks++))
+    verify_waydroid_container && ((passed_checks++))
+    verify_waydroid_images && ((passed_checks++))
+    verify_lxc_config && ((passed_checks++))
+
     echo "" | tee -a "$LOG_FILE"
-    
+
     if [ $passed_checks -eq $total_checks ]; then
         echo -e "${GREEN}状态: 所有检查通过 ✓ ($passed_checks/$total_checks)${NC}" | tee -a "$LOG_FILE"
         echo "" | tee -a "$LOG_FILE"
@@ -259,7 +281,7 @@ print_summary() {
         log_info "  waydroid session start"
         log_info "  waydroid show-full-ui"
         return 0
-    elif [ $passed_checks -ge 7 ]; then
+    elif [ $passed_checks -ge 8 ]; then
         echo -e "${YELLOW}状态: 基本功能正常 ($passed_checks/$total_checks)${NC}" | tee -a "$LOG_FILE"
         echo "" | tee -a "$LOG_FILE"
         log_warning "部分检查未通过，但核心功能可能正常工作"
@@ -278,20 +300,25 @@ show_troubleshooting() {
     log_info "故障排除建议:"
     echo "" | tee -a "$LOG_FILE"
     echo "1. 如果 binder 设备不存在:" | tee -a "$LOG_FILE"
-    echo "   sudo modprobe binder_linux devices=\"binder,hwbinder,vndbinder\"" | tee -a "$LOG_FILE"
+    echo "   sudo mkdir -p /dev/binderfs" | tee -a "$LOG_FILE"
+    echo "   sudo mount -t binder binder /dev/binderfs" | tee -a "$LOG_FILE"
+    echo "   sudo ln -sf /dev/binderfs/binder /dev/binder" | tee -a "$LOG_FILE"
+    echo "   sudo ln -sf /dev/binderfs/hwbinder /dev/hwbinder" | tee -a "$LOG_FILE"
+    echo "   sudo ln -sf /dev/binderfs/vndbinder /dev/vndbinder" | tee -a "$LOG_FILE"
     echo "" | tee -a "$LOG_FILE"
-    echo "2. 如果 ashmem 设备不存在:" | tee -a "$LOG_FILE"
-    echo "   sudo modprobe ashmem_linux" | tee -a "$LOG_FILE"
-    echo "" | tee -a "$LOG_FILE"
-    echo "3. 如果 Waydroid 服务未运行:" | tee -a "$LOG_FILE"
+    echo "2. 如果 Waydroid 服务未运行:" | tee -a "$LOG_FILE"
     echo "   sudo systemctl start waydroid-container" | tee -a "$LOG_FILE"
     echo "" | tee -a "$LOG_FILE"
-    echo "4. 查看 Waydroid 日志:" | tee -a "$LOG_FILE"
+    echo "3. 查看 Waydroid 日志:" | tee -a "$LOG_FILE"
     echo "   waydroid log" | tee -a "$LOG_FILE"
     echo "" | tee -a "$LOG_FILE"
-    echo "5. 重新初始化 Waydroid:" | tee -a "$LOG_FILE"
+    echo "4. 重新初始化 Waydroid:" | tee -a "$LOG_FILE"
     echo "   sudo rm -rf /var/lib/waydroid" | tee -a "$LOG_FILE"
     echo "   sudo waydroid init" | tee -a "$LOG_FILE"
+    echo "" | tee -a "$LOG_FILE"
+    echo "5. 检查网络配置（WSL共享网络模式）:" | tee -a "$LOG_FILE"
+    echo "   sudo waydroid shell" | tee -a "$LOG_FILE"
+    echo "   # 在 Android shell 中测试网络" | tee -a "$LOG_FILE"
     echo "" | tee -a "$LOG_FILE"
 }
 

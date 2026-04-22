@@ -34,7 +34,7 @@ log_error() {
 
 print_header() {
     echo -e "${BLUE}========================================${NC}"
-    echo -e "${BLUE}   安装 WSL2 内核 v1.0.0${NC}"
+    echo -e "${BLUE}   安装 WSL2 内核 v2.0.0${NC}"
     echo -e "${BLUE}========================================${NC}"
     echo "" | tee -a "$LOG_FILE"
 }
@@ -57,7 +57,7 @@ get_windows_home() {
 }
 
 find_kernel_image() {
-    log_info "查找内核镜像..."
+    log_info "查找内核镜像..." >&2
     
     local kernel_image=""
     
@@ -70,12 +70,12 @@ find_kernel_image() {
     fi
     
     if [ -n "$kernel_image" ]; then
-        log_success "找到内核镜像: $kernel_image"
-        echo "$kernel_image"
+        log_success "找到内核镜像: $kernel_image" >&2
+        printf '%s\n' "$kernel_image"
         return 0
     else
-        log_error "找不到内核镜像"
-        log_info "请确认已运行 03-build-kernel.sh 成功编译内核"
+        log_error "找不到内核镜像" >&2
+        log_info "请确认已运行 03-build-kernel.sh 成功编译内核" >&2
         return 1
     fi
 }
@@ -140,7 +140,10 @@ configure_wslconfig() {
     windows_home=$(get_windows_home)
     local wslconfig="$windows_home/.wslconfig"
     local windows_kernel_path
-    windows_kernel_path=$(find_kernel_image)
+    if ! windows_kernel_path=$(find_kernel_image); then
+        log_error "无法找到内核镜像"
+        return 1
+    fi
     
     local windows_style_path
     if command -v wslpath &> /dev/null; then
@@ -193,12 +196,16 @@ restart_wsl() {
     log_warning "WSL 即将关闭并重启"
     log_info "重启后请重新打开 WSL 终端"
     
-    read -p "确认现在重启 WSL? (Y/n): " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]] && [ -n "$REPLY" ]; then
-        log_info "请稍后手动重启 WSL:"
-        log_info "  在 PowerShell 中执行: wsl --shutdown"
-        return 0
+    if [ -z "$SKIP_CONFIRM" ]; then
+        read -p "确认现在重启 WSL? (Y/n): " -n 1 -r < /dev/tty 2>/dev/null || read -p "确认现在重启 WSL? (Y/n): " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Yy]$ ]] && [ -n "$REPLY" ]; then
+            log_info "请稍后手动重启 WSL:"
+            log_info "  在 PowerShell 中执行: wsl --shutdown"
+            return 0
+        fi
+    else
+        log_info "自动重启 WSL (SKIP_CONFIRM 已设置)"
     fi
     
     log_info "关闭 WSL..."
@@ -213,26 +220,6 @@ restart_wsl() {
     log_info "新内核将在下次启动时生效"
 }
 
-verify_new_kernel() {
-    log_info "验证新内核..."
-    
-    local current_kernel
-    current_kernel=$(uname -r)
-    
-    log_info "当前内核版本: $current_kernel"
-    
-    if echo "$current_kernel" | grep -q "waydroid\|custom"; then
-        log_success "新内核已生效"
-        echo "KERNEL_VERIFIED=true" >> "$LOG_FILE"
-        return 0
-    else
-        log_warning "内核版本未显示自定义标识"
-        log_info "这通常不影响功能，只要 binder 模块可用"
-        echo "KERNEL_VERIFIED=partial" >> "$LOG_FILE"
-        return 0
-    fi
-}
-
 main() {
     print_header
     
@@ -243,11 +230,15 @@ main() {
     log_warning "此步骤需要管理员权限"
     log_info "内核将被安装到 Windows 系统"
     
-    read -p "确认继续安装? (Y/n): " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]] && [ -n "$REPLY" ]; then
-        log_info "用户取消安装"
-        exit 0
+    if [ -z "$SKIP_CONFIRM" ]; then
+        read -p "确认继续安装? (Y/n): " -n 1 -r < /dev/tty 2>/dev/null || read -p "确认继续安装? (Y/n): " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Yy]$ ]] && [ -n "$REPLY" ]; then
+            log_info "用户取消安装"
+            exit 0
+        fi
+    else
+        log_info "跳过确认 (SKIP_CONFIRM 已设置)"
     fi
     
     local kernel_image
