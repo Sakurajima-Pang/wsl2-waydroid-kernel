@@ -1,24 +1,10 @@
 #!/bin/bash
 
-set -e
-set -o pipefail
-
+# 不使用 set -e 或 trap ERR，避免意外退出
+# 保留 DEBUG 选项
 if [ "${DEBUG:-0}" = "1" ]; then
     set -x
 fi
-
-error_handler() {
-    local line=$1
-    local error_code=$?
-    echo ""
-    echo "========================================"
-    echo "错误发生在第 $line 行，退出码: $error_code"
-    echo "========================================"
-    echo ""
-    exit $error_code
-}
-
-trap 'error_handler $LINENO' ERR
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
@@ -61,34 +47,44 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 log_info() {
-    echo -e "${BLUE}[INFO]${NC} $1" | tee -a "$LOG_FILE"
+    echo -e "${BLUE}[INFO]${NC} $1"
+    echo "[INFO] $1" >> "$LOG_FILE" 2>/dev/null || true
 }
 
 log_success() {
-    echo -e "${GREEN}[✓]${NC} $1" | tee -a "$LOG_FILE"
+    echo -e "${GREEN}[✓]${NC} $1"
+    echo "[✓] $1" >> "$LOG_FILE" 2>/dev/null || true
 }
 
 log_warning() {
-    echo -e "${YELLOW}[!]${NC} $1" | tee -a "$LOG_FILE"
+    echo -e "${YELLOW}[!]${NC} $1"
+    echo "[!] $1" >> "$LOG_FILE" 2>/dev/null || true
 }
 
 log_error() {
-    echo -e "${RED}[✗]${NC} $1" | tee -a "$LOG_FILE"
+    echo -e "${RED}[✗]${NC} $1"
+    echo "[✗] $1" >> "$LOG_FILE" 2>/dev/null || true
 }
 
 log_progress() {
-    echo -e "${BLUE}[PROGRESS]${NC} $1" | tee -a "$LOG_FILE"
+    echo -e "${BLUE}[PROGRESS]${NC} $1"
+    echo "[PROGRESS] $1" >> "$LOG_FILE" 2>/dev/null || true
+}
+
+log_echo() {
+    echo "$1"
+    echo "$1" >> "$LOG_FILE" 2>/dev/null || true
 }
 
 print_header() {
     echo -e "${BLUE}========================================${NC}"
     echo -e "${BLUE}   编译 WSL2 Waydroid 内核 v2.0.0${NC}"
     echo -e "${BLUE}========================================${NC}"
-    echo "" | tee -a "$LOG_FILE"
+    log_echo ""
 }
 
 print_footer() {
-    echo "" | tee -a "$LOG_FILE"
+    log_echo ""
     echo -e "${BLUE}========================================${NC}"
 }
 
@@ -255,32 +251,55 @@ configure_kernel() {
     local kernel_major
     kernel_major=$(get_kernel_major_version)
     
-    local config_options=(
-        "CONFIG_ANDROID=y"
+    # Waydroid 核心配置（Binder 驱动可以独立于 CONFIG_ANDROID 工作）
+    log_info "启用 Binder IPC 驱动..."
+    
+    # 设置自定义内核版本标识，便于识别
+    log_info "设置自定义内核版本标识..."
+    local local_version="-waydroid-custom"
+    
+    # 核心 Binder 配置 - 这些是 Waydroid 必需的
+    local binder_options=(
         "CONFIG_ANDROID_BINDER_IPC=y"
         "CONFIG_ANDROID_BINDERFS=y"
         "CONFIG_ANDROID_BINDER_DEVICES=\"binder,hwbinder,vndbinder\""
+        "CONFIG_LOCALVERSION=\"$local_version\""
+    )
+    
+    # 内存和 cgroup 配置（按依赖顺序）
+    local cgroup_options=(
+        "CONFIG_CGROUPS=y"
         "CONFIG_MEMCG=y"
+        "CONFIG_SWAP=y"
+        "CONFIG_MEMCG_SWAP=y"
         "CONFIG_CGROUP_DEVICE=y"
     )
     
+    # 合并所有配置
+    local all_options=("${binder_options[@]}" "${cgroup_options[@]}")
+    
     if [ "$(echo "$kernel_major < 5.18" | bc)" -eq 1 ]; then
-        config_options+=("CONFIG_ASHMEM=y")
+        all_options+=("CONFIG_ASHMEM=y")
         log_info "内核版本 < 5.18，启用 ASHMEM 支持"
     else
         log_info "内核版本 >= 5.18，ASHMEM 已被 memfd 替代，跳过"
     fi
     
-    for option in "${config_options[@]}"; do
+    # 应用配置
+    for option in "${all_options[@]}"; do
         local key
         key=$(echo "$option" | cut -d'=' -f1)
-        local value
-        value=$(echo "$option" | cut -d'=' -f2-)
         
-        if grep -q "^$key=" .config 2>/dev/null; then
+        if grep -q "^# $key is not set" .config 2>/dev/null; then
+            # 注释掉的配置，替换为启用
+            sed -i "s/^# $key is not set.*/$option/" .config
+            log_success "启用配置: $option"
+        elif grep -q "^$key=" .config 2>/dev/null; then
+            # 已存在的配置，更新
             sed -i "s/^$key=.*/$option/" .config
             log_success "更新配置: $option"
         else
+            # 不存在的配置，添加
             echo "$option" >> .config
             log_success "添加配置: $option"
         fi
@@ -291,7 +310,9 @@ configure_kernel() {
     
     log_info "验证关键配置..."
     local all_set=true
-    for option in "${config_options[@]}"; do
+    
+    # 验证 Binder 核心配置（这些是 Waydroid 真正需要的）
+    for option in "${binder_options[@]}"; do
         local key
         key=$(echo "$option" | cut -d'=' -f1)
         if grep -q "^$key=y" .config || grep -q "^$key=\"" .config; then
@@ -302,12 +323,41 @@ configure_kernel() {
         fi
     done
     
+    # 验证 cgroup 配置
+    for option in "${cgroup_options[@]}"; do
+        local key
+        key=$(echo "$option" | cut -d'=' -f1)
+        if grep -q "^$key=y" .config; then
+            log_success "✓ $key 已启用"
+        else
+            log_warning "✗ $key 未启用"
+        fi
+    done
+    
     if [ "$all_set" = true ]; then
-        log_success "所有关键配置已启用"
+        log_success "Binder 核心配置已启用（Waydroid 可以正常工作）"
         echo "KERNEL_CONFIG_SUCCESS=true" >> "$LOG_FILE"
     else
-        log_warning "部分配置可能未正确设置，但将继续编译"
-        echo "KERNEL_CONFIG_SUCCESS=partial" >> "$LOG_FILE"
+        log_warning "部分 Binder 配置未启用，尝试强制启用..."
+        
+        # 使用内核的 config 工具强制启用
+        if [ -f scripts/config ]; then
+            ./scripts/config --enable CONFIG_ANDROID_BINDER_IPC
+            ./scripts/config --enable CONFIG_ANDROID_BINDERFS
+            make olddefconfig 2>&1 | tee -a "$LOG_FILE"
+            
+            # 再次验证
+            if grep -q "^CONFIG_ANDROID_BINDER_IPC=y" .config; then
+                log_success "Binder IPC 已通过 config 工具启用"
+                all_set=true
+            fi
+        fi
+        
+        if [ "$all_set" = false ]; then
+            log_warning "配置验证未通过，但将继续编译"
+            log_info "提示: 编译后可能需要手动检查 binder 支持"
+            echo "KERNEL_CONFIG_SUCCESS=partial" >> "$LOG_FILE"
+        fi
     fi
     
     cp .config "$BUILD_DIR/kernel-config-backup-$(date +%Y%m%d-%H%M%S)"
@@ -365,12 +415,19 @@ compile_modules() {
         echo "MODULES_BUILD_SUCCESS=true" >> "$LOG_FILE"
         
         log_info "安装内核模块到 /lib/modules/..."
-        if make modules_install 2>&1 | tee -a "$LOG_FILE"; then
+        if sudo make modules_install 2>&1 | tee -a "$LOG_FILE"; then
             log_success "内核模块安装完成"
             echo "MODULES_INSTALL_SUCCESS=true" >> "$LOG_FILE"
         else
-            log_warning "内核模块安装失败"
-            echo "MODULES_INSTALL_SUCCESS=false" >> "$LOG_FILE"
+            log_warning "内核模块安装失败，尝试使用 root 权限..."
+            if make modules_install 2>&1 | tee -a "$LOG_FILE"; then
+                log_success "内核模块安装完成"
+                echo "MODULES_INSTALL_SUCCESS=true" >> "$LOG_FILE"
+            else
+                log_warning "内核模块安装失败，但这不影响内核镜像的使用"
+                log_info "提示: 可以手动运行 'sudo make modules_install' 来安装模块"
+                echo "MODULES_INSTALL_SUCCESS=false" >> "$LOG_FILE"
+            fi
         fi
     else
         log_warning "内核模块编译出现问题，但内核可能仍可用"

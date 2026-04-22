@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -e
+# 不使用 set -e，避免意外退出
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
@@ -17,30 +17,40 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 log_info() {
-    echo -e "${BLUE}[INFO]${NC} $1" | tee -a "$LOG_FILE"
+    echo -e "${BLUE}[INFO]${NC} $1"
+    echo "[INFO] $1" >> "$LOG_FILE" 2>/dev/null || true
 }
 
 log_success() {
-    echo -e "${GREEN}[✓]${NC} $1" | tee -a "$LOG_FILE"
+    echo -e "${GREEN}[✓]${NC} $1"
+    echo "[✓] $1" >> "$LOG_FILE" 2>/dev/null || true
 }
 
 log_warning() {
-    echo -e "${YELLOW}[!]${NC} $1" | tee -a "$LOG_FILE"
+    echo -e "${YELLOW}[!]${NC} $1"
+    echo "[!] $1" >> "$LOG_FILE" 2>/dev/null || true
 }
 
 log_error() {
-    echo -e "${RED}[✗]${NC} $1" | tee -a "$LOG_FILE"
+    echo -e "${RED}[✗]${NC} $1"
+    echo "[✗] $1" >> "$LOG_FILE" 2>/dev/null || true
+}
+
+# 辅助函数：输出到屏幕和日志
+log_echo() {
+    echo "$1"
+    echo "$1" >> "$LOG_FILE" 2>/dev/null || true
 }
 
 print_header() {
     echo -e "${BLUE}========================================${NC}"
     echo -e "${BLUE}   安装 WSL2 内核 v2.0.0${NC}"
     echo -e "${BLUE}========================================${NC}"
-    echo "" | tee -a "$LOG_FILE"
+    log_echo ""
 }
 
 print_footer() {
-    echo "" | tee -a "$LOG_FILE"
+    log_echo ""
     echo -e "${BLUE}========================================${NC}"
 }
 
@@ -139,18 +149,21 @@ configure_wslconfig() {
     local windows_home
     windows_home=$(get_windows_home)
     local wslconfig="$windows_home/.wslconfig"
-    local windows_kernel_path
-    if ! windows_kernel_path=$(find_kernel_image); then
-        log_error "无法找到内核镜像"
+    
+    # 使用复制到 Windows 的本地路径，而不是 WSL 网络路径
+    local windows_kernel_dir="$windows_home/wsl2-waydroid-kernel"
+    local windows_kernel_path="$windows_kernel_dir/bzImage-waydroid"
+    
+    # 检查内核文件是否已复制到 Windows
+    if [ ! -f "$windows_kernel_path" ]; then
+        log_error "内核文件未找到: $windows_kernel_path"
+        log_info "请先运行 copy_kernel_to_windows 复制内核"
         return 1
     fi
     
+    # 转换为 Windows 路径格式 (C:\Users\...)
     local windows_style_path
-    if command -v wslpath &> /dev/null; then
-        windows_style_path=$(wslpath -w "$windows_kernel_path" | sed 's/\\/\\\\/g')
-    else
-        windows_style_path=$(echo "$windows_kernel_path" | sed 's|^/mnt/c|C:|; s|/|\\\\|g')
-    fi
+    windows_style_path=$(echo "$windows_kernel_path" | sed 's|^/mnt/c/|C:\\\\|; s|/|\\\\\\\\|g')
     
     log_info "Windows 内核路径: $windows_style_path"
     
@@ -185,7 +198,8 @@ EOF
     
     log_success ".wslconfig 配置完成"
     log_info "配置文件内容:"
-    cat "$wslconfig" | tee -a "$LOG_FILE"
+    cat "$wslconfig"
+    cat "$wslconfig" >> "$LOG_FILE" 2>/dev/null || true
     
     echo "WSLCONFIG_PATH=$wslconfig" >> "$LOG_FILE"
 }
@@ -210,7 +224,7 @@ restart_wsl() {
     
     log_info "关闭 WSL..."
     if command -v wsl.exe &> /dev/null; then
-        wsl.exe --shutdown 2>&1 | tee -a "$LOG_FILE" || true
+        wsl.exe --shutdown 2>&1 >> "$LOG_FILE" 2>/dev/null || true
     else
         log_warning "无法自动关闭 WSL，请手动执行: wsl --shutdown"
     fi
@@ -225,7 +239,7 @@ main() {
     
     log_info "开始安装 WSL2 内核"
     log_info "日志文件: $LOG_FILE"
-    echo "" | tee -a "$LOG_FILE"
+    log_echo ""
     
     log_warning "此步骤需要管理员权限"
     log_info "内核将被安装到 Windows 系统"
@@ -245,20 +259,20 @@ main() {
     if ! kernel_image=$(find_kernel_image); then
         exit 1
     fi
-    echo "" | tee -a "$LOG_FILE"
+    log_echo ""
     
     backup_current_kernel
-    echo "" | tee -a "$LOG_FILE"
+    log_echo ""
     
     copy_kernel_to_windows
-    echo "" | tee -a "$LOG_FILE"
+    log_echo ""
     
     configure_wslconfig
-    echo "" | tee -a "$LOG_FILE"
+    log_echo ""
     
     restart_wsl
     
-    echo "" | tee -a "$LOG_FILE"
+    log_echo ""
     log_success "内核安装完成"
     log_info "WSL 重启后，请按顺序执行:"
     log_info "  1. bash 05-install-waydroid.sh  (安装 Waydroid)"

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -e
+# 不使用 set -e，避免意外退出
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
@@ -16,30 +16,40 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 log_info() {
-    echo -e "${BLUE}[INFO]${NC} $1" | tee -a "$LOG_FILE"
+    echo -e "${BLUE}[INFO]${NC} $1"
+    echo "[INFO] $1" >> "$LOG_FILE" 2>/dev/null || true
 }
 
 log_success() {
-    echo -e "${GREEN}[✓]${NC} $1" | tee -a "$LOG_FILE"
+    echo -e "${GREEN}[✓]${NC} $1"
+    echo "[✓] $1" >> "$LOG_FILE" 2>/dev/null || true
 }
 
 log_warning() {
-    echo -e "${YELLOW}[!]${NC} $1" | tee -a "$LOG_FILE"
+    echo -e "${YELLOW}[!]${NC} $1"
+    echo "[!] $1" >> "$LOG_FILE" 2>/dev/null || true
 }
 
 log_error() {
-    echo -e "${RED}[✗]${NC} $1" | tee -a "$LOG_FILE"
+    echo -e "${RED}[✗]${NC} $1"
+    echo "[✗] $1" >> "$LOG_FILE" 2>/dev/null || true
+}
+
+# 辅助函数：输出到屏幕和日志
+log_echo() {
+    echo "$1"
+    echo "$1" >> "$LOG_FILE" 2>/dev/null || true
 }
 
 print_header() {
     echo -e "${BLUE}========================================${NC}"
     echo -e "${BLUE}   Waydroid 安装验证报告 v2.0.0${NC}"
     echo -e "${BLUE}========================================${NC}"
-    echo "" | tee -a "$LOG_FILE"
+    log_echo ""
 }
 
 print_footer() {
-    echo "" | tee -a "$LOG_FILE"
+    log_echo ""
     echo -e "${BLUE}========================================${NC}"
 }
 
@@ -128,7 +138,7 @@ verify_binderfs() {
         binder_count=$(ls -1 /dev/binderfs 2>/dev/null | wc -l)
         if [ "$binder_count" -gt 0 ]; then
             log_success "binderfs 中有 $binder_count 个设备"
-            ls -la /dev/binderfs | tee -a "$LOG_FILE"
+            ls -la /dev/binderfs >> "$LOG_FILE" 2>/dev/null || true
         else
             log_warning "binderfs 中没有设备"
         fi
@@ -205,7 +215,7 @@ verify_waydroid_container() {
         fi
         
         log_info "Waydroid 状态详情:"
-        waydroid status 2>/dev/null | tee -a "$LOG_FILE" || true
+        waydroid status 2>/dev/null >> "$LOG_FILE" 2>/dev/null || true
     fi
     
     return 0
@@ -222,7 +232,7 @@ verify_waydroid_images() {
         
         if [ "$image_count" -gt 0 ]; then
             log_success "找到 $image_count 个镜像文件"
-            ls -lh "$images_dir" | tee -a "$LOG_FILE"
+            ls -lh "$images_dir" >> "$LOG_FILE" 2>/dev/null || true
             echo "WAYDROID_IMAGES_EXIST=true" >> "$LOG_FILE"
             return 0
         else
@@ -257,8 +267,9 @@ print_summary() {
     local total_checks=11
     local passed_checks=0
 
-    echo "" | tee -a "$LOG_FILE"
-    echo -e "${BLUE}----------------------------------------${NC}" | tee -a "$LOG_FILE"
+    log_echo ""
+    echo -e "${BLUE}----------------------------------------${NC}"
+    echo "----------------------------------------" >> "$LOG_FILE" 2>/dev/null || true
 
     verify_kernel_version && ((passed_checks++))
     verify_kernel_modules && ((passed_checks++))
@@ -271,24 +282,27 @@ print_summary() {
     verify_waydroid_images && ((passed_checks++))
     verify_lxc_config && ((passed_checks++))
 
-    echo "" | tee -a "$LOG_FILE"
+    log_echo ""
 
     if [ $passed_checks -eq $total_checks ]; then
-        echo -e "${GREEN}状态: 所有检查通过 ✓ ($passed_checks/$total_checks)${NC}" | tee -a "$LOG_FILE"
-        echo "" | tee -a "$LOG_FILE"
+        echo -e "${GREEN}状态: 所有检查通过 ✓ ($passed_checks/$total_checks)${NC}"
+        echo "状态: 所有检查通过 ✓ ($passed_checks/$total_checks)" >> "$LOG_FILE" 2>/dev/null || true
+        log_echo ""
         log_success "Waydroid 安装验证成功"
         log_info "可以开始使用 Waydroid:"
         log_info "  waydroid session start"
         log_info "  waydroid show-full-ui"
         return 0
     elif [ $passed_checks -ge 8 ]; then
-        echo -e "${YELLOW}状态: 基本功能正常 ($passed_checks/$total_checks)${NC}" | tee -a "$LOG_FILE"
-        echo "" | tee -a "$LOG_FILE"
+        echo -e "${YELLOW}状态: 基本功能正常 ($passed_checks/$total_checks)${NC}"
+        echo "状态: 基本功能正常 ($passed_checks/$total_checks)" >> "$LOG_FILE" 2>/dev/null || true
+        log_echo ""
         log_warning "部分检查未通过，但核心功能可能正常工作"
         return 0
     else
-        echo -e "${RED}状态: 检查未通过 ($passed_checks/$total_checks)${NC}" | tee -a "$LOG_FILE"
-        echo "" | tee -a "$LOG_FILE"
+        echo -e "${RED}状态: 检查未通过 ($passed_checks/$total_checks)${NC}"
+        echo "状态: 检查未通过 ($passed_checks/$total_checks)" >> "$LOG_FILE" 2>/dev/null || true
+        log_echo ""
         log_error "部分关键组件未正确安装"
         log_info "请检查上述错误信息并修复问题"
         return 1
@@ -296,30 +310,30 @@ print_summary() {
 }
 
 show_troubleshooting() {
-    echo "" | tee -a "$LOG_FILE"
+    log_echo ""
     log_info "故障排除建议:"
-    echo "" | tee -a "$LOG_FILE"
-    echo "1. 如果 binder 设备不存在:" | tee -a "$LOG_FILE"
-    echo "   sudo mkdir -p /dev/binderfs" | tee -a "$LOG_FILE"
-    echo "   sudo mount -t binder binder /dev/binderfs" | tee -a "$LOG_FILE"
-    echo "   sudo ln -sf /dev/binderfs/binder /dev/binder" | tee -a "$LOG_FILE"
-    echo "   sudo ln -sf /dev/binderfs/hwbinder /dev/hwbinder" | tee -a "$LOG_FILE"
-    echo "   sudo ln -sf /dev/binderfs/vndbinder /dev/vndbinder" | tee -a "$LOG_FILE"
-    echo "" | tee -a "$LOG_FILE"
-    echo "2. 如果 Waydroid 服务未运行:" | tee -a "$LOG_FILE"
-    echo "   sudo systemctl start waydroid-container" | tee -a "$LOG_FILE"
-    echo "" | tee -a "$LOG_FILE"
-    echo "3. 查看 Waydroid 日志:" | tee -a "$LOG_FILE"
-    echo "   waydroid log" | tee -a "$LOG_FILE"
-    echo "" | tee -a "$LOG_FILE"
-    echo "4. 重新初始化 Waydroid:" | tee -a "$LOG_FILE"
-    echo "   sudo rm -rf /var/lib/waydroid" | tee -a "$LOG_FILE"
-    echo "   sudo waydroid init" | tee -a "$LOG_FILE"
-    echo "" | tee -a "$LOG_FILE"
-    echo "5. 检查网络配置（WSL共享网络模式）:" | tee -a "$LOG_FILE"
-    echo "   sudo waydroid shell" | tee -a "$LOG_FILE"
-    echo "   # 在 Android shell 中测试网络" | tee -a "$LOG_FILE"
-    echo "" | tee -a "$LOG_FILE"
+    log_echo ""
+    log_echo "1. 如果 binder 设备不存在:"
+    log_echo "   sudo mkdir -p /dev/binderfs"
+    log_echo "   sudo mount -t binder binder /dev/binderfs"
+    log_echo "   sudo ln -sf /dev/binderfs/binder /dev/binder"
+    log_echo "   sudo ln -sf /dev/binderfs/hwbinder /dev/hwbinder"
+    log_echo "   sudo ln -sf /dev/binderfs/vndbinder /dev/vndbinder"
+    log_echo ""
+    log_echo "2. 如果 Waydroid 服务未运行:"
+    log_echo "   sudo systemctl start waydroid-container"
+    log_echo ""
+    log_echo "3. 查看 Waydroid 日志:"
+    log_echo "   waydroid log"
+    log_echo ""
+    log_echo "4. 重新初始化 Waydroid:"
+    log_echo "   sudo rm -rf /var/lib/waydroid"
+    log_echo "   sudo waydroid init"
+    log_echo ""
+    log_echo "5. 检查网络配置（WSL共享网络模式）:"
+    log_echo "   sudo waydroid shell"
+    log_echo "   # 在 Android shell 中测试网络"
+    log_echo ""
 }
 
 main() {
@@ -327,7 +341,7 @@ main() {
     
     log_info "开始验证 Waydroid 安装"
     log_info "日志文件: $LOG_FILE"
-    echo "" | tee -a "$LOG_FILE"
+    log_echo ""
     
     local exit_code=0
     

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -e
+# 不使用 set -e，避免意外退出
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
@@ -16,30 +16,40 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 log_info() {
-    echo -e "${BLUE}[INFO]${NC} $1" | tee -a "$LOG_FILE"
+    echo -e "${BLUE}[INFO]${NC} $1"
+    echo "[INFO] $1" >> "$LOG_FILE" 2>/dev/null || true
 }
 
 log_success() {
-    echo -e "${GREEN}[✓]${NC} $1" | tee -a "$LOG_FILE"
+    echo -e "${GREEN}[✓]${NC} $1"
+    echo "[✓] $1" >> "$LOG_FILE" 2>/dev/null || true
 }
 
 log_warning() {
-    echo -e "${YELLOW}[!]${NC} $1" | tee -a "$LOG_FILE"
+    echo -e "${YELLOW}[!]${NC} $1"
+    echo "[!] $1" >> "$LOG_FILE" 2>/dev/null || true
 }
 
 log_error() {
-    echo -e "${RED}[✗]${NC} $1" | tee -a "$LOG_FILE"
+    echo -e "${RED}[✗]${NC} $1"
+    echo "[✗] $1" >> "$LOG_FILE" 2>/dev/null || true
+}
+
+# 辅助函数：输出到屏幕和日志
+log_echo() {
+    echo "$1"
+    echo "$1" >> "$LOG_FILE" 2>/dev/null || true
 }
 
 print_header() {
     echo -e "${BLUE}========================================${NC}"
     echo -e "${BLUE}   回滚 WSL2 配置 v2.0.0${NC}"
     echo -e "${BLUE}========================================${NC}"
-    echo "" | tee -a "$LOG_FILE"
+    log_echo ""
 }
 
 print_footer() {
-    echo "" | tee -a "$LOG_FILE"
+    log_echo ""
     echo -e "${BLUE}========================================${NC}"
 }
 
@@ -100,7 +110,7 @@ restore_default_kernel() {
     if [[ ! $REPLY =~ ^[Nn]$ ]] || [ -z "$REPLY" ]; then
         log_info "关闭 WSL..."
         if command -v wsl.exe &> /dev/null; then
-            wsl.exe --shutdown 2>&1 | tee -a "$LOG_FILE" || true
+            wsl.exe --shutdown 2>&1 >> "$LOG_FILE" 2>/dev/null || true
         fi
         log_success "WSL 已关闭，请重新打开 WSL 终端"
     fi
@@ -157,15 +167,15 @@ uninstall_waydroid() {
     fi
     
     log_info "停止 Waydroid 服务..."
-    sudo systemctl stop waydroid-container 2>&1 | tee -a "$LOG_FILE" || true
-    sudo systemctl disable waydroid-container 2>&1 | tee -a "$LOG_FILE" || true
+    sudo systemctl stop waydroid-container 2>&1 >> "$LOG_FILE" 2>/dev/null || true
+    sudo systemctl disable waydroid-container 2>&1 >> "$LOG_FILE" 2>/dev/null || true
     
     log_info "停止 Waydroid 会话..."
-    waydroid session stop 2>&1 | tee -a "$LOG_FILE" || true
+    waydroid session stop 2>&1 >> "$LOG_FILE" 2>/dev/null || true
     
     log_info "删除 Waydroid 数据..."
-    sudo rm -rf /var/lib/waydroid 2>&1 | tee -a "$LOG_FILE" || true
-    rm -rf "$HOME/.local/share/waydroid" 2>&1 | tee -a "$LOG_FILE" || true
+    sudo rm -rf /var/lib/waydroid 2>&1 >> "$LOG_FILE" 2>/dev/null || true
+    rm -rf "$HOME/.local/share/waydroid" 2>&1 >> "$LOG_FILE" 2>/dev/null || true
     
     log_info "卸载 Waydroid 包..."
     local distro
@@ -173,20 +183,20 @@ uninstall_waydroid() {
     
     case "$distro" in
         ubuntu|debian)
-            sudo apt-get remove -y waydroid 2>&1 | tee -a "$LOG_FILE" || true
-            sudo apt-get autoremove -y 2>&1 | tee -a "$LOG_FILE" || true
+            sudo apt-get remove -y waydroid 2>&1 >> "$LOG_FILE" 2>/dev/null || true
+            sudo apt-get autoremove -y 2>&1 >> "$LOG_FILE" 2>/dev/null || true
             ;;
         fedora)
-            sudo dnf remove -y waydroid 2>&1 | tee -a "$LOG_FILE" || true
+            sudo dnf remove -y waydroid 2>&1 >> "$LOG_FILE" 2>/dev/null || true
             ;;
         arch)
-            sudo pacman -R waydroid 2>&1 | tee -a "$LOG_FILE" || true
+            sudo pacman -R waydroid 2>&1 >> "$LOG_FILE" 2>/dev/null || true
             ;;
     esac
     
     log_info "删除 Waydroid 仓库..."
-    sudo rm -f /etc/apt/sources.list.d/waydroid.list 2>&1 | tee -a "$LOG_FILE" || true
-    sudo rm -f /usr/share/keyrings/waydroid.gpg 2>&1 | tee -a "$LOG_FILE" || true
+    sudo rm -f /etc/apt/sources.list.d/waydroid.list 2>&1 >> "$LOG_FILE" 2>/dev/null || true
+    sudo rm -f /usr/share/keyrings/waydroid.gpg 2>&1 >> "$LOG_FILE" 2>/dev/null || true
     
     log_success "Waydroid 已卸载"
     echo "WAYDROID_UNINSTALLED=true" >> "$LOG_FILE"
@@ -196,10 +206,10 @@ full_rollback() {
     log_info "执行完整回滚..."
     
     restore_default_kernel
-    echo "" | tee -a "$LOG_FILE"
+    log_echo ""
     
     cleanup_build_artifacts
-    echo "" | tee -a "$LOG_FILE"
+    log_echo ""
     
     uninstall_waydroid
     
@@ -208,10 +218,11 @@ full_rollback() {
 }
 
 show_summary() {
-    echo "" | tee -a "$LOG_FILE"
-    echo -e "${BLUE}----------------------------------------${NC}" | tee -a "$LOG_FILE"
+    log_echo ""
+    echo -e "${BLUE}----------------------------------------${NC}"
+    echo "----------------------------------------" >> "$LOG_FILE" 2>/dev/null || true
     log_info "回滚操作摘要:"
-    echo "" | tee -a "$LOG_FILE"
+    log_echo ""
     
     if grep -q "KERNEL_RESTORED=true" "$LOG_FILE" 2>/dev/null; then
         log_success "✓ 内核配置已恢复"
@@ -227,7 +238,7 @@ show_summary() {
         log_success "✓ Waydroid 已卸载"
     fi
     
-    echo "" | tee -a "$LOG_FILE"
+    log_echo ""
     log_info "如需重新安装，请按顺序运行:"
     log_info "  bash 03-build-kernel.sh"
     log_info "  bash 04-install-kernel.sh"
@@ -239,7 +250,7 @@ main() {
     
     log_info "WSL2 Waydroid 回滚工具"
     log_info "日志文件: $LOG_FILE"
-    echo "" | tee -a "$LOG_FILE"
+    log_echo ""
     
     show_menu
     

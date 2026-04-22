@@ -1,14 +1,32 @@
 #!/bin/bash
 
+# 调试版本 - 添加详细输出
+echo "DEBUG: 脚本开始执行"
+echo "DEBUG: Bash版本: $BASH_VERSION"
+
 # 简单的错误处理：打印错误但不退出
 # 不使用 set -e 或 trap ERR，避免意外退出
 
+echo "DEBUG: 正在设置变量..."
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+echo "DEBUG: SCRIPT_DIR=$SCRIPT_DIR"
+
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+echo "DEBUG: PROJECT_DIR=$PROJECT_DIR"
+
 LOG_DIR="$PROJECT_DIR/logs"
+echo "DEBUG: LOG_DIR=$LOG_DIR"
+
+echo "DEBUG: 创建日志目录..."
 mkdir -p "$LOG_DIR"
+echo "DEBUG: 日志目录创建完成"
 
 LOG_FILE="$LOG_DIR/01-check-env-$(date +%Y%m%d-%H%M%S).log"
+echo "DEBUG: LOG_FILE=$LOG_FILE"
+
+echo "DEBUG: 测试写入日志..."
+echo "Test log entry" >> "$LOG_FILE" 2>&1
+echo "DEBUG: 日志写入测试完成"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -16,31 +34,43 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m'
 
+echo "DEBUG: 颜色变量设置完成"
+
 log_info() {
     echo -e "${BLUE}[INFO]${NC} $1"
     echo "[INFO] $1" >> "$LOG_FILE" 2>/dev/null || true
 }
+
+echo "DEBUG: log_info 函数定义完成"
 
 log_success() {
     echo -e "${GREEN}[✓]${NC} $1"
     echo "[✓] $1" >> "$LOG_FILE" 2>/dev/null || true
 }
 
+echo "DEBUG: log_success 函数定义完成"
+
 log_warning() {
     echo -e "${YELLOW}[!]${NC} $1"
     echo "[!] $1" >> "$LOG_FILE" 2>/dev/null || true
 }
+
+echo "DEBUG: log_warning 函数定义完成"
 
 log_error() {
     echo -e "${RED}[✗]${NC} $1"
     echo "[✗] $1" >> "$LOG_FILE" 2>/dev/null || true
 }
 
+echo "DEBUG: log_error 函数定义完成"
+
 # 辅助函数：输出到屏幕和日志
 log_echo() {
     echo "$1"
     echo "$1" >> "$LOG_FILE" 2>/dev/null || true
 }
+
+echo "DEBUG: log_echo 函数定义完成"
 
 print_header() {
     echo -e "${BLUE}========================================${NC}"
@@ -49,73 +79,93 @@ print_header() {
     log_echo ""
 }
 
+echo "DEBUG: print_header 函数定义完成"
+
 print_footer() {
     log_echo ""
     echo -e "${BLUE}========================================${NC}"
 }
 
+echo "DEBUG: print_footer 函数定义完成"
+
 check_wsl_version() {
+    echo "DEBUG: check_wsl_version 开始"
     log_info "检查 WSL 版本..."
     
     # 检查是否在 WSL 环境中（多种方式）
     local is_wsl=false
     
+    echo "DEBUG: 检查 wsl.exe..."
     # 方式1: 检查 wsl.exe 命令
     if command -v wsl.exe &> /dev/null; then
         is_wsl=true
         log_info "检测到 wsl.exe 命令"
     fi
     
+    echo "DEBUG: 检查 /proc/version..."
     # 方式2: 检查 /proc/version
     if grep -qi "microsoft" /proc/version 2>/dev/null; then
         is_wsl=true
         log_info "通过 /proc/version 检测到 WSL"
     fi
     
+    echo "DEBUG: 检查 WSL_INTEROP..."
     # 方式3: 检查 WSL_INTEROP
     if [ -f /run/WSL_INTEROP ]; then
         is_wsl=true
         log_info "通过 WSL_INTEROP 检测到 WSL2"
     fi
     
+    echo "DEBUG: is_wsl=$is_wsl"
     if [ "$is_wsl" = false ]; then
         log_error "未检测到 WSL，请确保在 WSL 环境中运行此脚本"
+        echo "DEBUG: check_wsl_version 返回 1"
         return 1
     fi
     
+    echo "DEBUG: 获取内核版本..."
     local kernel_release
     kernel_release=$(uname -r)
     log_info "内核发布版本: $kernel_release"
     
+    echo "DEBUG: 匹配内核版本..."
     # 使用 POSIX 兼容的字符串匹配
     case "$kernel_release" in
         *[Ww][Ss][Ll]2*)
             log_success "WSL 版本: 2"
             echo "WSL_VERSION=2" >> "$LOG_FILE"
+            echo "DEBUG: check_wsl_version 返回 0"
             return 0
             ;;
         *[Ww][Ss][Ll]*)
             log_error "WSL 版本: 1 (需要 WSL2)"
             echo "WSL_VERSION=1" >> "$LOG_FILE"
+            echo "DEBUG: check_wsl_version 返回 1"
             return 1
             ;;
         *)
+            echo "DEBUG: 默认分支..."
             # 检查 /proc/version 作为备选
             if grep -qi "microsoft.*wsl" /proc/version 2>/dev/null; then
                 if grep -qi "wsl2" /proc/version 2>/dev/null || [ -f /run/WSL_INTEROP ]; then
                     log_success "WSL 版本: 2 (通过 /proc/version 检测)"
                     echo "WSL_VERSION=2" >> "$LOG_FILE"
+                    echo "DEBUG: check_wsl_version 返回 0"
                     return 0
                 fi
             fi
             log_error "无法确定 WSL 版本，内核版本: $kernel_release"
             echo "WSL_VERSION=unknown" >> "$LOG_FILE"
+            echo "DEBUG: check_wsl_version 返回 1"
             return 1
             ;;
     esac
 }
 
+echo "DEBUG: check_wsl_version 函数定义完成"
+
 check_distribution() {
+    echo "DEBUG: check_distribution 开始"
     log_info "检查发行版信息..."
     
     if [ -f /etc/os-release ]; then
@@ -148,7 +198,10 @@ check_distribution() {
     fi
 }
 
+echo "DEBUG: check_distribution 函数定义完成"
+
 check_architecture() {
+    echo "DEBUG: check_architecture 开始"
     log_info "检查系统架构..."
     
     local arch
@@ -173,7 +226,10 @@ check_architecture() {
     esac
 }
 
+echo "DEBUG: check_architecture 函数定义完成"
+
 check_disk_space() {
+    echo "DEBUG: check_disk_space 开始"
     log_info "检查磁盘空间..."
     
     local required_gb=20
@@ -194,7 +250,10 @@ check_disk_space() {
     fi
 }
 
+echo "DEBUG: check_disk_space 函数定义完成"
+
 check_network() {
+    echo "DEBUG: check_network 开始"
     log_info "检查网络连接..."
     
     local github_accessible=false
@@ -212,7 +271,10 @@ check_network() {
     return 0
 }
 
+echo "DEBUG: check_network 函数定义完成"
+
 check_kernel_version() {
+    echo "DEBUG: check_kernel_version 开始"
     log_info "检查当前内核版本..."
     
     local kernel_version
@@ -224,7 +286,10 @@ check_kernel_version() {
     return 0
 }
 
+echo "DEBUG: check_kernel_version 函数定义完成"
+
 check_memory() {
+    echo "DEBUG: check_memory 开始"
     log_info "检查内存..."
     
     local total_mem
@@ -250,7 +315,10 @@ check_memory() {
     return 0
 }
 
+echo "DEBUG: check_memory 函数定义完成"
+
 check_existing_waydroid() {
+    echo "DEBUG: check_existing_waydroid 开始"
     log_info "检查现有 Waydroid 安装..."
     
     if command -v waydroid &> /dev/null; then
@@ -267,7 +335,10 @@ check_existing_waydroid() {
     return 0
 }
 
+echo "DEBUG: check_existing_waydroid 函数定义完成"
+
 check_filesystem_case_sensitive() {
+    echo "DEBUG: check_filesystem_case_sensitive 开始"
     log_info "检查文件系统大小写敏感性..."
     
     # 检查文件系统类型
@@ -301,7 +372,10 @@ check_filesystem_case_sensitive() {
     fi
 }
 
+echo "DEBUG: check_filesystem_case_sensitive 函数定义完成"
+
 main() {
+    echo "DEBUG: main 函数开始"
     print_header
     
     log_info "开始环境检查..."
@@ -321,6 +395,7 @@ main() {
         log_info "[$step/$total_steps] 正在检查: $name..."
     }
 
+    echo "DEBUG: 开始第1个检查"
     current_step=$((current_step + 1))
     show_progress $current_step "WSL版本"
     checks_total=$((checks_total + 1))
@@ -331,6 +406,7 @@ main() {
     fi
     log_echo ""
 
+    echo "DEBUG: 开始第2个检查"
     current_step=$((current_step + 1))
     show_progress $current_step "发行版信息"
     checks_total=$((checks_total + 1))
@@ -341,6 +417,7 @@ main() {
     fi
     log_echo ""
 
+    echo "DEBUG: 开始第3个检查"
     current_step=$((current_step + 1))
     show_progress $current_step "系统架构"
     checks_total=$((checks_total + 1))
@@ -351,6 +428,7 @@ main() {
     fi
     log_echo ""
 
+    echo "DEBUG: 开始第4个检查"
     current_step=$((current_step + 1))
     show_progress $current_step "磁盘空间"
     checks_total=$((checks_total + 1))
@@ -361,6 +439,7 @@ main() {
     fi
     log_echo ""
 
+    echo "DEBUG: 开始第5个检查"
     current_step=$((current_step + 1))
     show_progress $current_step "网络连接"
     checks_total=$((checks_total + 1))
@@ -371,6 +450,7 @@ main() {
     fi
     log_echo ""
 
+    echo "DEBUG: 开始第6个检查"
     current_step=$((current_step + 1))
     show_progress $current_step "内核版本"
     checks_total=$((checks_total + 1))
@@ -381,6 +461,7 @@ main() {
     fi
     log_echo ""
 
+    echo "DEBUG: 开始第7个检查"
     current_step=$((current_step + 1))
     show_progress $current_step "内存状态"
     checks_total=$((checks_total + 1))
@@ -391,6 +472,7 @@ main() {
     fi
     log_echo ""
 
+    echo "DEBUG: 开始第8个检查"
     current_step=$((current_step + 1))
     show_progress $current_step "Waydroid安装状态"
     checks_total=$((checks_total + 1))
@@ -401,6 +483,7 @@ main() {
     fi
     log_echo ""
 
+    echo "DEBUG: 开始第9个检查"
     current_step=$((current_step + 1))
     show_progress $current_step "文件系统大小写敏感"
     checks_total=$((checks_total + 1))
@@ -430,7 +513,10 @@ main() {
     log_info "日志已保存到: $LOG_FILE"
     log_info "检查完成时间: $(date '+%Y-%m-%d %H:%M:%S')"
     
+    echo "DEBUG: main 函数结束，exit_code=$exit_code"
     exit $exit_code
 }
 
+echo "DEBUG: 所有函数定义完成，准备调用 main"
 main "$@"
+echo "DEBUG: 脚本结束"

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -e
+# 不使用 set -e，避免意外退出
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
@@ -16,34 +16,45 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 log_info() {
-    echo -e "${BLUE}[INFO]${NC} $1" | tee -a "$LOG_FILE"
+    echo -e "${BLUE}[INFO]${NC} $1"
+    echo "[INFO] $1" >> "$LOG_FILE" 2>/dev/null || true
 }
 
 log_success() {
-    echo -e "${GREEN}[✓]${NC} $1" | tee -a "$LOG_FILE"
+    echo -e "${GREEN}[✓]${NC} $1"
+    echo "[✓] $1" >> "$LOG_FILE" 2>/dev/null || true
 }
 
 log_warning() {
-    echo -e "${YELLOW}[!]${NC} $1" | tee -a "$LOG_FILE"
+    echo -e "${YELLOW}[!]${NC} $1"
+    echo "[!] $1" >> "$LOG_FILE" 2>/dev/null || true
 }
 
 log_error() {
-    echo -e "${RED}[✗]${NC} $1" | tee -a "$LOG_FILE"
+    echo -e "${RED}[✗]${NC} $1"
+    echo "[✗] $1" >> "$LOG_FILE" 2>/dev/null || true
 }
 
 log_progress() {
-    echo -e "${BLUE}[PROGRESS]${NC} $1" | tee -a "$LOG_FILE"
+    echo -e "${BLUE}[PROGRESS]${NC} $1"
+    echo "[PROGRESS] $1" >> "$LOG_FILE" 2>/dev/null || true
+}
+
+# 辅助函数：输出到屏幕和日志
+log_echo() {
+    echo "$1"
+    echo "$1" >> "$LOG_FILE" 2>/dev/null || true
 }
 
 print_header() {
     echo -e "${BLUE}========================================${NC}"
     echo -e "${BLUE}   安装 Waydroid v2.0.0${NC}"
     echo -e "${BLUE}========================================${NC}"
-    echo "" | tee -a "$LOG_FILE"
+    log_echo ""
 }
 
 print_footer() {
-    echo "" | tee -a "$LOG_FILE"
+    log_echo ""
     echo -e "${BLUE}========================================${NC}"
 }
 
@@ -70,14 +81,14 @@ add_waydroid_repository() {
                 sudo apt-get install -y curl
             fi
             
-            curl https://repo.waydro.id/waydroid.gpg | sudo gpg --dearmor -o /usr/share/keyrings/waydroid.gpg 2>&1 | tee -a "$LOG_FILE"
+            curl https://repo.waydro.id/waydroid.gpg | sudo gpg --dearmor -o /usr/share/keyrings/waydroid.gpg 2>&1 >> "$LOG_FILE" 2>/dev/null || true
             
             local ubuntu_version
             ubuntu_version=$(grep "^VERSION_CODENAME=" /etc/os-release | cut -d'=' -f2 | tr -d '"')
             
-            echo "deb [signed-by=/usr/share/keyrings/waydroid.gpg] https://repo.waydro.id/ ${ubuntu_version} main" | sudo tee /etc/apt/sources.list.d/waydroid.list
+            echo "deb [signed-by=/usr/share/keyrings/waydroid.gpg] https://repo.waydro.id/ ${ubuntu_version} main" | sudo tee /etc/apt/sources.list.d/waydroid.list >> "$LOG_FILE" 2>/dev/null || true
             
-            sudo apt-get update 2>&1 | tee -a "$LOG_FILE"
+            sudo apt-get update 2>&1 >> "$LOG_FILE" 2>/dev/null || true
             log_success "Waydroid 仓库添加完成"
             ;;
         *)
@@ -95,7 +106,7 @@ install_waydroid_package() {
     
     case "$distro" in
         ubuntu|debian)
-            sudo apt-get install -y waydroid 2>&1 | tee -a "$LOG_FILE"
+            sudo apt-get install -y waydroid 2>&1 >> "$LOG_FILE" 2>/dev/null || true
             ;;
         *)
             log_error "不支持的发行版: $distro"
@@ -135,7 +146,7 @@ install_dependencies() {
     
     case "$distro" in
         ubuntu|debian)
-            sudo apt-get install -y "${packages[@]}" 2>&1 | tee -a "$LOG_FILE"
+            sudo apt-get install -y "${packages[@]}" 2>&1 >> "$LOG_FILE" 2>/dev/null || true
             ;;
     esac
     
@@ -162,7 +173,7 @@ initialize_waydroid() {
     log_info "开始初始化（这可能需要 10-20 分钟）..."
     log_info "正在下载 Android 系统镜像，请耐心等待..."
     
-    if sudo waydroid init $gapps_option 2>&1 | tee -a "$LOG_FILE"; then
+    if sudo waydroid init $gapps_option 2>&1 >> "$LOG_FILE" 2>/dev/null; then
         log_success "Waydroid 初始化完成"
         echo "WAYDROID_INIT_SUCCESS=true" >> "$LOG_FILE"
         return 0
@@ -180,7 +191,7 @@ start_waydroid_service() {
         log_success "Waydroid 服务已在运行"
     else
         log_info "启动 Waydroid 容器服务..."
-        sudo systemctl start waydroid-container 2>&1 | tee -a "$LOG_FILE" || true
+        sudo systemctl start waydroid-container 2>&1 >> "$LOG_FILE" 2>/dev/null || true
         
         sleep 2
         
@@ -192,7 +203,7 @@ start_waydroid_service() {
         fi
     fi
     
-    sudo systemctl enable waydroid-container 2>&1 | tee -a "$LOG_FILE" || true
+    sudo systemctl enable waydroid-container 2>&1 >> "$LOG_FILE" 2>/dev/null || true
 }
 
 check_binder_devices() {
@@ -218,7 +229,7 @@ check_binder_devices() {
         log_warning "部分 binder 设备不存在"
         log_info "尝试加载 binder 模块..."
         
-        sudo modprobe binder_linux devices="binder,hwbinder,vndbinder" 2>&1 | tee -a "$LOG_FILE" || true
+        sudo modprobe binder_linux devices="binder,hwbinder,vndbinder" 2>&1 >> "$LOG_FILE" 2>/dev/null || true
         
         sleep 1
         
@@ -244,7 +255,7 @@ setup_binderfs() {
     sudo mkdir -p /dev/binderfs
     
     log_info "挂载 binderfs..."
-    if sudo mount -t binder binder /dev/binderfs 2>&1 | tee -a "$LOG_FILE"; then
+    if sudo mount -t binder binder /dev/binderfs 2>&1 >> "$LOG_FILE" 2>/dev/null; then
         log_success "binderfs 挂载成功"
         
         log_info "创建 binder 设备符号链接..."
@@ -255,32 +266,32 @@ setup_binderfs() {
         log_success "binder 设备符号链接创建完成"
     else
         log_warning "binderfs 挂载失败，尝试使用 modprobe..."
-        sudo modprobe binder_linux devices="binder,hwbinder,vndbinder" 2>&1 | tee -a "$LOG_FILE" || true
+        sudo modprobe binder_linux devices="binder,hwbinder,vndbinder" 2>&1 >> "$LOG_FILE" 2>/dev/null || true
     fi
 }
 
 show_post_install_info() {
-    echo "" | tee -a "$LOG_FILE"
+    log_echo ""
     log_success "Waydroid 安装完成"
-    echo "" | tee -a "$LOG_FILE"
+    log_echo ""
     
     log_info "使用方法:"
-    echo "" | tee -a "$LOG_FILE"
-    echo "  1. 启动 Waydroid 会话:" | tee -a "$LOG_FILE"
-    echo "     waydroid session start" | tee -a "$LOG_FILE"
-    echo "" | tee -a "$LOG_FILE"
-    echo "  2. 在新终端中启动图形界面:" | tee -a "$LOG_FILE"
-    echo "     waydroid show-full-ui" | tee -a "$LOG_FILE"
-    echo "" | tee -a "$LOG_FILE"
-    echo "  3. 常用命令:" | tee -a "$LOG_FILE"
-    echo "     waydroid status       # 查看状态" | tee -a "$LOG_FILE"
-    echo "     waydroid log          # 查看日志" | tee -a "$LOG_FILE"
-    echo "     waydroid session stop # 停止会话" | tee -a "$LOG_FILE"
-    echo "" | tee -a "$LOG_FILE"
-    echo "  4. 服务管理:" | tee -a "$LOG_FILE"
-    echo "     sudo systemctl start waydroid-container  # 启动服务" | tee -a "$LOG_FILE"
-    echo "     sudo systemctl stop waydroid-container   # 停止服务" | tee -a "$LOG_FILE"
-    echo "" | tee -a "$LOG_FILE"
+    log_echo ""
+    log_echo "  1. 启动 Waydroid 会话:"
+    log_echo "     waydroid session start"
+    log_echo ""
+    log_echo "  2. 在新终端中启动图形界面:"
+    log_echo "     waydroid show-full-ui"
+    log_echo ""
+    log_echo "  3. 常用命令:"
+    log_echo "     waydroid status       # 查看状态"
+    log_echo "     waydroid log          # 查看日志"
+    log_echo "     waydroid session stop # 停止会话"
+    log_echo ""
+    log_echo "  4. 服务管理:"
+    log_echo "     sudo systemctl start waydroid-container  # 启动服务"
+    log_echo "     sudo systemctl stop waydroid-container   # 停止服务"
+    log_echo ""
     
     log_info "提示: 首次启动可能需要一些时间来初始化 Android 系统"
 }
@@ -290,7 +301,7 @@ main() {
     
     log_info "开始安装 Waydroid"
     log_info "日志文件: $LOG_FILE"
-    echo "" | tee -a "$LOG_FILE"
+    log_echo ""
     
     read -p "确认开始安装 Waydroid? (Y/n): " -n 1 -r < /dev/tty 2>/dev/null || read -p "确认开始安装 Waydroid? (Y/n): " -n 1 -r
     echo
@@ -300,25 +311,25 @@ main() {
     fi
     
     check_binder_devices
-    echo "" | tee -a "$LOG_FILE"
+    log_echo ""
     
     setup_binderfs
-    echo "" | tee -a "$LOG_FILE"
+    log_echo ""
     
     add_waydroid_repository
-    echo "" | tee -a "$LOG_FILE"
+    log_echo ""
     
     install_dependencies
-    echo "" | tee -a "$LOG_FILE"
+    log_echo ""
     
     install_waydroid_package
-    echo "" | tee -a "$LOG_FILE"
+    log_echo ""
     
     initialize_waydroid
-    echo "" | tee -a "$LOG_FILE"
+    log_echo ""
     
     start_waydroid_service
-    echo "" | tee -a "$LOG_FILE"
+    log_echo ""
     
     show_post_install_info
     

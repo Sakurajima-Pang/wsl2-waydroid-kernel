@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -e
+# 不使用 set -e，避免意外退出
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
@@ -16,30 +16,39 @@ BLUE='\033[0;34m'
 NC='\033[0m'
 
 log_info() {
-    echo -e "${BLUE}[INFO]${NC} $1" | tee -a "$LOG_FILE"
+    echo -e "${BLUE}[INFO]${NC} $1"
+    echo "[INFO] $1" >> "$LOG_FILE" 2>/dev/null || true
 }
 
 log_success() {
-    echo -e "${GREEN}[✓]${NC} $1" | tee -a "$LOG_FILE"
+    echo -e "${GREEN}[✓]${NC} $1"
+    echo "[✓] $1" >> "$LOG_FILE" 2>/dev/null || true
 }
 
 log_warning() {
-    echo -e "${YELLOW}[!]${NC} $1" | tee -a "$LOG_FILE"
+    echo -e "${YELLOW}[!]${NC} $1"
+    echo "[!] $1" >> "$LOG_FILE" 2>/dev/null || true
 }
 
 log_error() {
-    echo -e "${RED}[✗]${NC} $1" | tee -a "$LOG_FILE"
+    echo -e "${RED}[✗]${NC} $1"
+    echo "[✗] $1" >> "$LOG_FILE" 2>/dev/null || true
+}
+
+log_echo() {
+    echo "$1"
+    echo "$1" >> "$LOG_FILE" 2>/dev/null || true
 }
 
 print_header() {
     echo -e "${BLUE}========================================${NC}"
     echo -e "${BLUE}   安装编译依赖 v2.0.0${NC}"
     echo -e "${BLUE}========================================${NC}"
-    echo "" | tee -a "$LOG_FILE"
+    log_echo ""
 }
 
 print_footer() {
-    echo "" | tee -a "$LOG_FILE"
+    log_echo ""
     echo -e "${BLUE}========================================${NC}"
 }
 
@@ -229,7 +238,7 @@ main() {
     log_info "开始安装编译依赖..."
     log_info "日志文件: $LOG_FILE"
     log_info "开始时间: $(date '+%Y-%m-%d %H:%M:%S')"
-    echo "" | tee -a "$LOG_FILE"
+    log_echo ""
     
     local current_step=0
     local total_steps=4
@@ -243,29 +252,29 @@ main() {
     current_step=$((current_step + 1))
     show_progress $current_step "更新软件包列表"
     update_package_list
-    echo "" | tee -a "$LOG_FILE"
+    log_echo ""
     
     current_step=$((current_step + 1))
     show_progress $current_step "安装依赖包"
     install_dependencies
-    echo "" | tee -a "$LOG_FILE"
+    log_echo ""
     
     current_step=$((current_step + 1))
     show_progress $current_step "检查编译器版本"
     check_compiler_version
-    echo "" | tee -a "$LOG_FILE"
+    log_echo ""
     
     current_step=$((current_step + 1))
     show_progress $current_step "验证安装"
     if verify_installation; then
-        echo "" | tee -a "$LOG_FILE"
+        log_echo ""
         log_success "✓ 所有依赖安装完成"
         log_info "可以继续执行下一步: bash 03-build-kernel.sh"
         log_info "完成时间: $(date '+%Y-%m-%d %H:%M:%S')"
         print_footer
         exit 0
     else
-        echo "" | tee -a "$LOG_FILE"
+        log_echo ""
         log_error "✗ 依赖安装验证失败"
         log_info "完成时间: $(date '+%Y-%m-%d %H:%M:%S')"
         print_footer
